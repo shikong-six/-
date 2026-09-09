@@ -20,3 +20,6 @@ OLLAMA_EMBED_MODEL=nomic-embed-text
 
 # ===== LanceDB 向量库文件目录（默认 houduan/vector_db/）=====
 LANCEDB_PATH=
+
+# ===== JWT 认证密钥（生产环境必须改成随机长字符串）=====
+JWT_SECRET=
