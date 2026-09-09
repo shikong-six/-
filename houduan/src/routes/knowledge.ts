@@ -1,0 +1,149 @@
+// 知识库路由：处理文档上传、解析入库、相似度检索
+import pool from '../services/db'
+import {Router} from 'express'
+import multer from 'multer'
+import path from 'path'
+import {parseDocument} from '../services/documentParser'
+import {splitText} from '../services/textSplitter'
+import {embedTexts, embedQuery} from '../services/embedding'
+import {addChunks, searchChunks, ChunkRecord} from '../services/vectorStore'
+
+const router=Router()
+
+// 配置文件上传
+// 用 diskStorage 保留原始文件名和扩展名
+// 解析文档时要靠扩展名判断格式（.pdf/.docx/.txt）
+// 文件名加时间戳前缀，避免不同文档重名互相覆盖
+const storage=multer.diskStorage({
+    destination:'upload/',
+       filename:(req,file,cb)=>{
+        // multer 默认按 latin1 解码文件名，中文会乱码，这里手动转回 UTF-8
+        const originalName=Buffer.from(file.originalname,'latin1').toString('utf8')
+        cb(null,`${Date.now()}-${originalName}`)
+    }
+})
+const upload=multer({storage});
+
+// 上传文档接口 POST /api/knowledge/upload
+// 流程：保存文件 → 解析文本 → 分块 → 向量化 → 写入向量库
+router.post('/upload',upload.single('file'),async (req,res)=>{
+    try{
+        // req.file 是上传的文件信息
+        if(!req.file){
+            return res.status(400).json({
+                success:false,
+                message:'没有上传文件'
+                   })
+                }
+        const file=req.file;
+
+        // 1. 解析文档，提取纯文本
+        const text=await parseDocument(file.path);
+        if(!text.trim()){
+            return res.status(400).json({
+                success:false,
+                message:'文档中没有提取到文字内容'
+            });
+        }
+
+        // 2. 文本分块
+        const chunks=splitText(text);
+
+        // 3. 批量向量化（一次请求算完所有块，比一块请求一次快得多）
+        const vectors=await embedTexts(chunks);
+
+        // 4. 组装成向量库记录
+        const records:ChunkRecord[]=chunks.map((chunk,index)=>({
+            vector:vectors[index],     // 该块对应的向量
+            text:chunk,                // 文本块
+            docName:file.originalname, // 所属文档名
+            chunkIndex:index           // 分块序号
+        }));
+
+        // 5. 写入向量库
+        await addChunks(records);
+        //6.写入MySQL文档元数据表
+        await pool.query(
+            'INSERT INTO documents (filename,size,chunk_count) VALUES (?,?,?)',
+            [file.originalname,file.size,chunks.length]
+        )
+
+        // 返回处理结果
+        res.json({
+            success:true,
+            data:{
+                filename:file.originalname,
+                size:file.size,
+                chunkCount:chunks.length
+            }
+        });
+    }catch(error:any){
+        res.status(500).json({
+            success:false,
+            message:error.message
+        });
+    }
+})
+
+// 相似度检索接口 POST /api/knowledge/search
+// 请求体：{ query: '问题文本', topK: 3 }
+// 用于测试向量库检索效果，后面 RAG 问答也会用这条链路
+router.post('/search',async (req,res)=>{
+    try{
+        const {query,topK}=req.body;
+        if(!query||typeof query!=='string'){
+            return res.status(400).json({
+                success:false,
+                message:'参数错误，query 必须是非空字符串'
+            });
+        }
+
+        // 1. 把问题文本向量化
+        const queryVector=await embedQuery(query);
+
+        // 2. 在向量库里找最相近的 topK 个文本块
+        const results=await searchChunks(queryVector,topK||3);
+        //按"文档名＋块号"去重，避免内容重叠的分块重复出现在结果里
+        const seen=new Set<string>()
+        const deduped=results.filter(chunk=>{
+            //用文档名#块号作为唯一标识
+            const key=`${chunk.docName}#${chunk.chunkIndex}`;
+            //已经出现过的过滤掉
+            if(seen.has(key)) return false;
+            //没出现过就几下，保留这一条
+            seen.add(key);
+            return true;
+        })
+
+        res.json({
+            success:true,
+            data:deduped
+        });
+    }catch(error:any){
+        res.status(500).json({
+            success:false,
+            message:error.message
+        });
+    }
+})
+
+//文档列表接口GET/api/knowledge/List
+//从MySQL读已上传文档，前端页面加载时调用
+router.get('/list',async (req,res)=>{
+    try{
+        //接上传时间倒序，新上传的排在最前面
+         const [rows]=await pool.query(
+            'SELECT id,filename,size,chunk_count AS chunkCount,created_at AS createdAt FROM documents ORDER BY id DESC'
+        );
+        res.json({
+            success:true,
+            data:rows
+        });
+    }catch(error:any){
+        res.status(500).json({
+            success:false,
+            message:error.message
+        })
+    }
+})
+export default router;
