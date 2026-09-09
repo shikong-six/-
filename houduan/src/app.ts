@@ -8,6 +8,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 // 引入聊天路由
 import chatRouter from './routes/chat'
+// 引入鉴权中间件
+import {authMiddleware} from './services/auth'
 
 // 明确指定 .env 文件路径为当前工作目录下的 .env
 dotenv.config({path:path.resolve(process.cwd(),'.env')})
@@ -30,10 +32,14 @@ app.get('/',(req,res)=>{
 });
 // 注册聊天路由
 // 前端访问 http://localhost:3000/api/chat 会进入 chatRouter 处理
-app.use('/api/chat',chatRouter);
-// 注册知识库路由
+// authMiddleware 鉴权：没带有效 token 的请求直接 401，不会进入业务路由
+app.use('/api/chat', authMiddleware, chatRouter);
+// 注册知识库路由（同样受鉴权保护）
 import knowledgeRouter from './routes/knowledge'
-app.use('/api/knowledge',knowledgeRouter)
+app.use('/api/knowledge', authMiddleware, knowledgeRouter)
+// 注册认证路由（注册/登录是公开接口，不能加鉴权，否则永远登不进去）
+import authRouter from './routes/auth'
+app.use('/api/auth', authRouter)
 // 404 处理：如果请求的路径没有匹配任何路由，返回 404
 app.use((req,res)=>{
   res.status(404).json({
