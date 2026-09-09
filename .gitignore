@@ -63,10 +63,12 @@ coverage/
 
 # Vector database local data (if any)
 vector_data/
+vector_db/
 chroma_data/
 qdrant_storage/
 
 # Uploaded files (dev/test only)
+upload/
 uploads/
 temp/
 tmp/
