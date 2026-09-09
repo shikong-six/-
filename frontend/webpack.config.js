@@ -25,7 +25,10 @@ module.exports={
             test:/\.ts$/,
             loader:'ts-loader',
             options:{
-                appendTsSuffixTo:[/\.vue$/]
+                appendTsSuffixTo:[/\.vue$/],
+                // dev 下不做类型检查只转译（模板插槽的类型标注在 dev/prod 编译产物里表现不一致，
+                // 会在 dev 报 Cannot find name；类型检查统一交给 npm run type-check 的 vue-tsc）
+                transpileOnly:true
             },
             exclude:/node_modules/
         },
@@ -45,6 +48,14 @@ module.exports={
         port:8080,
         hot:true,
         open:true,
-        historyApiFallback:true
+        historyApiFallback:true,
+        //代理配置:所有以/api开头的请求都会转发到后端
+        proxy:[
+            {   
+                context:['/api'],
+                target:'http://localhost:3000',
+                changeOrigin:true
+            }
+        ]
     }
 };

@@ -1,13 +1,13 @@
-//引入Vue Router的两个函数
-//createRouter 用于创建路由实例
-//createWebHistory 用于使用HTML5 的history模式
+// 引入 Vue Router 的两个函数
+// createRouter 用于创建路由实例
+// createWebHistory 用于使用 HTML5 的 history 模式
 import {createRouter,createWebHistory} from 'vue-router';
 
-//定义路由表
-//每个路由对象包含
-//path:访问路径
-//name:路由名称
-//component:对应的页面组件，用()=>import()实现懒加载
+// 定义路由表
+// 每个路由对象包含：
+// path：访问路径
+// name：路由名称
+// component：对应的页面组件，用 ()=>import() 实现懒加载
 const routes=[
 {
     path:'/',
@@ -23,6 +23,11 @@ const routes=[
     path:'/Knowledge',
     name:'Knowledge',
     component:()=>import('@/views/KnowledgeView.vue')
+},
+{
+    path:'/history',
+    name:'History',
+    component:()=>import('@/views/HistoryView.vue')
 }
 ];
 

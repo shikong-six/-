@@ -32,6 +32,11 @@
             <el-icon><Document/></el-icon>
             <span>知识库</span>
         </el-menu-item>
+    <!--对话历史菜单-->
+    <el-menu-item index="/history">
+      <el-icon><Clock/></el-icon>
+      <span>对话历史</span>
+    </el-menu-item>
     </el-menu>
 </el-aside>
    <!--右侧主内容区-->
@@ -48,7 +53,7 @@ import {computed} from 'vue'
 //从vue-router中引入获取当前路由的钩子
 import {useRoute} from 'vue-router';
 //从图标中引入三个图标组件
-import {HomeFilled, ChatDotRound, Document} from '@element-plus/icons-vue'
+import {HomeFilled, ChatDotRound, Document,Clock} from '@element-plus/icons-vue'
 
 //获取当前激活的路由对象
 const route=useRoute()

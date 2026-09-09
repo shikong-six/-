@@ -1,11 +1,11 @@
-<!--先您过目根组件-->
+<!-- 整个应用的根组件 -->
 <template>
-  <!--直接使用布局组件，整个页面由AppLayout控制-->
+  <!-- 直接使用布局组件，整个页面由 AppLayout 控制 -->
   <AppLayout/>
 </template>
 
 <script setup lang="ts">
-//引入刚才创建的布局组件
+// 引入整体布局组件
 import AppLayout from '@/components/AppLayout.vue';
 </script>
 
@@ -14,6 +14,6 @@ import AppLayout from '@/components/AppLayout.vue';
 body{
   margin:0;
   padding:0;
-  font-family:'Mincrsoft YaHei-serif',
+  font-family:'Microsoft YaHei-serif'
 }
 </style>
