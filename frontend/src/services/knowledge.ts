@@ -1,5 +1,6 @@
 // 知识库相关 API 封装：文档列表、上传、相似度检索
-import axios from 'axios';
+// 统一走 request 实例（自动携带 token，401 自动跳登录）
+import request from './request';
 
 // 文档元数据（对应后端 MySQL documents 表）
 export interface DocumentItem {
@@ -34,7 +35,7 @@ interface ApiResponse<T> {
 
 // 获取已上传文档列表（后端按上传时间倒序返回）
 export async function getDocumentList(): Promise<DocumentItem[]> {
-  const response = await axios.get<ApiResponse<DocumentItem[]>>('/api/knowledge/list');
+  const response = await request.get<ApiResponse<DocumentItem[]>>('/knowledge/list');
   if (response.data.success) {
     return response.data.data;
   }
@@ -46,8 +47,8 @@ export async function uploadDocument(file: File): Promise<UploadResult> {
   // 用 FormData 传文件，字段名必须是 file（和后端 multer 的 upload.single('file') 对应）
   const formData = new FormData();
   formData.append('file', file);
-  const response = await axios.post<ApiResponse<UploadResult>>(
-    '/api/knowledge/upload',
+  const response = await request.post<ApiResponse<UploadResult>>(
+    '/knowledge/upload',
     formData
   );
   if (response.data.success) {
@@ -58,7 +59,7 @@ export async function uploadDocument(file: File): Promise<UploadResult> {
 
 // 相似度检索测试：返回与问题最相近的 topK 个文本块
 export async function searchKnowledge(query: string, topK = 3): Promise<SearchResult[]> {
-  const response = await axios.post<ApiResponse<SearchResult[]>>('/api/knowledge/search', { query, topK });
+  const response = await request.post<ApiResponse<SearchResult[]>>('/knowledge/search', { query, topK });
   if (response.data.success) {
     return response.data.data;
   }

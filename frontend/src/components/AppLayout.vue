@@ -2,6 +2,12 @@
 <template>
     <!--el-container 是Element Plus的容器组件,class="layout"用于设置高度-->
     <el-container class="layout">
+        <!--顶部栏：显示当前用户和退出按钮-->
+        <el-header class="topbar">
+            <span class="topbar-user">当前用户：{{ username }}</span>
+            <el-button link type="danger" @click="handleLogout">退出登录</el-button>
+        </el-header>
+        <el-container>
         <!--左侧侧边栏，宽度固定220-->
         <el-aside width="220px" class="aside">
             <!--顶部Logo区域-->
@@ -45,18 +51,31 @@
     <router-view/>
    </el-main>
     </el-container>
+    </el-container>
 </template>
 
 <script setup lang="ts">
 //从vue中引入计算属性
 import {computed} from 'vue'
-//从vue-router中引入获取当前路由的钩子
-import {useRoute} from 'vue-router';
-//从图标中引入三个图标组件
+//从vue-router中引入获取当前路由的钩子和跳转方法
+import {useRoute, useRouter} from 'vue-router';
+//从图标中引入四个图标组件
 import {HomeFilled, ChatDotRound, Document,Clock} from '@element-plus/icons-vue'
+//引入认证相关：显示用户名、退出登录
+import {getUsername, logout} from '@/services/auth'
 
 //获取当前激活的路由对象
 const route=useRoute()
+//路由跳转，退出登录后用
+const router=useRouter()
+//顶部显示当前登录用户名
+const username=getUsername()
+
+//退出登录：清掉本地凭证，回登录页（路由守卫会放行 /login）
+const handleLogout=()=>{
+    logout()
+    router.push('/login')
+}
 //根据当前路径计算要高亮的菜单项
 const activeMenu=computed(()=>route.path);
 </script>
@@ -64,6 +83,22 @@ const activeMenu=computed(()=>route.path);
 /* 整个布局占满视口高度 */
 .layout {
   height: 100vh;
+}
+
+/* 顶部栏：白底，右侧放用户信息 */
+.topbar {
+  background-color: #fff;
+  border-bottom: 1px solid #e4e7ed;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* 顶部用户名 */
+.topbar-user {
+  color: #606266;
+  font-size: 14px;
 }
 
 /* 侧边栏背景色 */

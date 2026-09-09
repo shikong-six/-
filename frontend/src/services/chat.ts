@@ -1,5 +1,5 @@
-// 引入 axios，用于发送 HTTP 请求
-import axios from 'axios';
+// 引入 axios... 改为统一 request 实例（自动携带 token，401 自动跳登录）
+import request from './request';
 
 // 引用来源：后端召回的法条块信息
 export interface Reference {
@@ -28,8 +28,8 @@ interface ChatResponse {
 // 返回值：AI 的回答 + 引用来源列表
 export async function sendMessage(messages: ChatMessage[]): Promise<{ answer: string; references: Reference[] }> {
   // 发送 POST 请求到 /api/chat
-  const response = await axios.post<ChatResponse>(
-    '/api/chat',
+  const response = await request.post<ChatResponse>(
+    '/chat',
     { messages }
   );
   // 如果后端返回成功
@@ -53,7 +53,7 @@ interface ApiResponse<T>{
 }
 //查询对话历史列表(最多50条，时间倒序)
 export async function getChatHistory():Promise<ChatHistoryItem[]>{
-  const response=await axios.get<ApiResponse<ChatHistoryItem[]>>('/api/chat/history');
+  const response=await request.get<ApiResponse<ChatHistoryItem[]>>('/chat/history');
   if(response.data.success){
     return response.data.data
   }

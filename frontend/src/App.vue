@@ -1,12 +1,10 @@
 <!-- 整个应用的根组件 -->
 <template>
-  <!-- 直接使用布局组件，整个页面由 AppLayout 控制 -->
-  <AppLayout/>
+  <!-- 直接渲染当前路由对应的页面（登录页或带布局的业务页面） -->
+  <router-view/>
 </template>
 
 <script setup lang="ts">
-// 引入整体布局组件
-import AppLayout from '@/components/AppLayout.vue';
 </script>
 
 <style>
