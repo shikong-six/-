@@ -9,9 +9,8 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
-        "@/*": ["src/*"]
+        "@/*": ["./src/*"]
     },
     "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
