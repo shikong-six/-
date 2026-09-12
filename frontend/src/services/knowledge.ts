@@ -65,3 +65,13 @@ export async function searchKnowledge(query: string, topK = 3): Promise<SearchRe
   }
   throw new Error(response.data.message || '检索失败');
 }
+
+// 删除文档：后端会同步删除 MySQL 元数据和向量库分块
+export async function deleteDocument(id: number): Promise<void> {
+  // 发送 DELETE 请求到 /api/knowledge/:id
+  const response = await request.delete<ApiResponse<{ id: number }>>(`/knowledge/${id}`);
+  // 后端返回失败时抛出错误信息
+  if (!response.data.success) {
+    throw new Error(response.data.message || '删除失败');
+  }
+}

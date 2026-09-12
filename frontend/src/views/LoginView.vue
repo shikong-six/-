@@ -5,6 +5,8 @@
       <!-- 系统标题 -->
       <h2 class="login-title">法制通</h2>
       <p class="login-subtitle">法律智能问答系统</p>
+      <!-- 标题下的渐变分隔线 -->
+      <div class="title-divider"></div>
 
       <!-- 登录/注册切换标签 -->
       <el-tabs v-model="mode" class="login-tabs" stretch>
@@ -92,38 +94,51 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-/* 整页居中，给卡片一个背景色 */
+/* 整页居中：深色渐变背景 */
 .login-page {
   height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f5f7fa;
+  background: linear-gradient(135deg, #1f2d3d 0%, #2b5876 50%, #4e4376 100%);
 }
 
-/* 登录卡片 */
+/* 登录卡片：白色微透明、大圆角、柔和阴影 */
 .login-card {
   width: 380px;
-  background-color: #fff;
-  border-radius: 12px;
-  padding: 36px 32px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.96);
+  border-radius: 16px;
+  padding: 40px 36px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
 }
 
-/* 系统标题 */
+/* 系统标题：主色渐变文字 */
 .login-title {
   margin: 0;
   text-align: center;
-  font-size: 28px;
-  color: #303133;
+  font-size: 30px;
+  /* 渐变文字：背景裁剪成文字形状 */
+  background: linear-gradient(90deg, #409eff, #67c23a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* 副标题 */
 .login-subtitle {
-  margin: 8px 0 24px;
+  margin: 10px 0 0;
   text-align: center;
   color: #909399;
   font-size: 14px;
+}
+
+/* 标题下的渐变分隔线 */
+.title-divider {
+  width: 60px;
+  height: 3px;
+  margin: 20px auto 24px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #409eff, #67c23a);
 }
 
 /* 提交按钮占满整行 */

@@ -49,6 +49,9 @@ module.exports={
         hot:true,
         open:true,
         historyApiFallback:true,
+        // 关闭 gzip 压缩：v5 默认开启，压缩中间件会攒住 SSE 流、结束才一次性刷出，
+        // 导致流式问答在 dev 代理下退化成"一大块冒出"
+        compress:false,
         //代理配置:所有以/api开头的请求都会转发到后端
         proxy:[
             {   
