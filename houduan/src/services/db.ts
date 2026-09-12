@@ -26,6 +26,82 @@ async function initDb(){
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间'
         ) COMMENT='用户表'
     `);
+    // ===== 自动迁移：给 chat_history 表补 user_id 列（数据按用户隔离用）=====
+    // MySQL 不支持 ADD COLUMN IF NOT EXISTS，所以先查 information_schema 确认列不存在再 ALTER
+    try {
+        // 查询 chat_history 表里是否已有 user_id 列
+        const [columns] = await pool.query<any[]>(
+            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_history' AND COLUMN_NAME = 'user_id'`
+        );
+        // 查询结果为空说明列不存在，执行 ALTER 补上（允许 NULL：老数据没有归属用户）
+        if (columns.length === 0) {
+            await pool.query(
+                `ALTER TABLE chat_history ADD COLUMN user_id INT NULL COMMENT '提问用户ID'`
+            );
+            console.log('chat_history 表已补充 user_id 列');
+        }
+    } catch (err: any) {
+        // 迁移失败只打日志不阻断启动（可能是数据库没起或表还没建）
+        console.error('chat_history 补 user_id 列失败:', err.message);
+    }
+    // ===== 自动迁移：chat_sessions 会话表 =====
+    // 一次提问生成一个会话，多轮消息挂在会话下；建表语句幂等，可重复执行
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS chat_sessions (
+                id INT AUTO_INCREMENT PRIMARY KEY COMMENT '自增ID',
+                user_id INT NOT NULL COMMENT '所属用户ID',
+                title VARCHAR(100) NOT NULL COMMENT '会话标题（取首问前20字）',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '最后活跃时间',
+                INDEX idx_user (user_id)
+            ) COMMENT='对话会话'
+        `);
+    } catch (err: any) {
+        // 建表失败只打日志不阻断启动
+        console.error('初始化 chat_sessions 表失败:', err.message);
+    }
+    // ===== 自动迁移：给 chat_history 表补 session_id 列（消息挂到会话下）=====
+    // 老数据 session_id 为 NULL（历史页只显示挂上了会话的记录，不影响）
+    try {
+        // 查询 chat_history 表里是否已有 session_id 列
+        const [columns] = await pool.query<any[]>(
+            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_history' AND COLUMN_NAME = 'session_id'`
+        );
+        // 查询结果为空说明列不存在，执行 ALTER 补上并加索引（按会话查消息是高频查询）
+        if (columns.length === 0) {
+            await pool.query(
+                `ALTER TABLE chat_history ADD COLUMN session_id INT NULL COMMENT '所属会话ID'`
+            );
+            await pool.query(
+                `ALTER TABLE chat_history ADD INDEX idx_session (session_id)`
+            );
+            console.log('chat_history 表已补充 session_id 列');
+        }
+    } catch (err: any) {
+        // 迁移失败只打日志不阻断启动
+        console.error('chat_history 补 session_id 列失败:', err.message);
+    }
+    // ===== 自动迁移：给 chat_history 表补 feedback 列（答案点赞/点踩：1赞 -1踩 NULL未反馈）=====
+    try {
+        // 查询 chat_history 表里是否已有 feedback 列
+        const [columns] = await pool.query<any[]>(
+            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_history' AND COLUMN_NAME = 'feedback'`
+        );
+        // 查询结果为空说明列不存在，执行 ALTER 补上（允许 NULL：未反馈）
+        if (columns.length === 0) {
+            await pool.query(
+                `ALTER TABLE chat_history ADD COLUMN feedback TINYINT NULL COMMENT '用户反馈：1赞 -1踩 NULL未反馈'`
+            );
+            console.log('chat_history 表已补充 feedback 列');
+        }
+    } catch (err: any) {
+        // 迁移失败只打日志不阻断启动
+        console.error('chat_history 补 feedback 列失败:', err.message);
+    }
 }
 // 异步执行建表，失败只打日志不阻断启动（可能是数据库没起）
 initDb().catch(err=>console.error('初始化 users 表失败:',err.message));

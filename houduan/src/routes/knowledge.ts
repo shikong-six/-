@@ -6,7 +6,7 @@ import path from 'path'
 import {parseDocument} from '../services/documentParser'
 import {splitText} from '../services/textSplitter'
 import {embedTexts, embedQuery} from '../services/embedding'
-import {addChunks, searchChunks, ChunkRecord} from '../services/vectorStore'
+import {addChunks, searchChunks, deleteChunksByDocName, ChunkRecord} from '../services/vectorStore'
 
 const router=Router()
 
@@ -14,6 +14,7 @@ const router=Router()
 // 用 diskStorage 保留原始文件名和扩展名
 // 解析文档时要靠扩展名判断格式（.pdf/.docx/.txt）
 // 文件名加时间戳前缀，避免不同文档重名互相覆盖
+// limits 限制文件最大 20MB：不限制的话超大文件会撑爆磁盘/内存
 const storage=multer.diskStorage({
     destination:'upload/',
        filename:(req,file,cb)=>{
@@ -22,7 +23,11 @@ const storage=multer.diskStorage({
         cb(null,`${Date.now()}-${originalName}`)
     }
 })
-const upload=multer({storage});
+const upload=multer({
+    storage,
+    // 文件大小上限 20MB，超出会抛 LIMIT_FILE_SIZE 错误（由 app.ts 的错误中间件统一兜底）
+    limits:{fileSize:20*1024*1024}
+});
 
 // 上传文档接口 POST /api/knowledge/upload
 // 流程：保存文件 → 解析文本 → 分块 → 向量化 → 写入向量库
@@ -144,6 +149,37 @@ router.get('/list',async (req,res)=>{
             success:false,
             message:error.message
         })
+    }
+})
+
+//删除文档接口 DELETE /api/knowledge/:id
+//MySQL 元数据 + 向量库分块一起删，保证两处数据一致
+router.delete('/:id',async (req,res)=>{
+    try{
+        //从路径参数取文档 ID
+        const id=Number(req.params.id);
+        //先查文档元数据，拿到文件名（向量库记录按文件名关联）
+        const [rows]=await pool.query<any[]>('SELECT id,filename FROM documents WHERE id=?',[id]);
+        //查不到说明文档不存在
+        if(rows.length===0){
+            return res.status(404).json({success:false,message:'文档不存在'});
+        }
+        //取出文件名，后面删向量库要用
+        const filename=rows[0].filename;
+        //删除向量库里该文档的所有分块（向量库删失败不阻断，只记日志，MySQL 元数据照常删）
+        try{
+            await deleteChunksByDocName(filename);
+        }catch(vectorError:any){
+            console.error('删除向量库分块失败:',vectorError.message);
+        }
+        //删除 MySQL 里的文档元数据
+        await pool.query('DELETE FROM documents WHERE id=?',[id]);
+        //删除成功，返回被删文档的 ID
+        res.json({success:true,data:{id}});
+    }catch(error:any){
+        //删除失败返回500
+        console.error('删除文档失败:',error.message);
+        res.status(500).json({success:false,message:error.message});
     }
 })
 export default router;

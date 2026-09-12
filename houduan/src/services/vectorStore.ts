@@ -71,4 +71,18 @@ export async function searchChunks(queryVector:number[],topk:number=3):Promise<S
         score:r._distance
     }));
 }
+
+//按文档名删除向量库里该文档的所有分块（知识库文档删除时配套调用）
+export async function deleteChunksByDocName(docName:string):Promise<void>{
+    //拿到向量表，一张表都没建过就不用删
+    const table=await getTable();
+    if(!table){
+        return;
+    }
+    // LanceDB 的 delete 接收 SQL 风格的 where 条件
+    // 文档名里的单引号要转义成两个单引号，防止条件串被截断
+    const escaped=docName.replace(/'/g,"''");
+    //执行删除：删掉所有 docName 等于该文档名的记录
+    await table.delete(`docName = '${escaped}'`);
+}
     
