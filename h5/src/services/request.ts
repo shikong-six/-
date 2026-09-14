@@ -3,7 +3,8 @@
 import axios from 'axios';
 
 // 创建实例，baseURL 统一前缀 /api，业务代码里写 /chat 即可
-const request = axios.create({baseURL: '/api'});
+// 弱网兜底：20 秒无响应判超时（移动端网络不稳定，避免无限转圈）
+const request = axios.create({baseURL: '/api', timeout: 20000});
 
 // ===== 请求拦截器：发请求前自动带上 token =====
 request.interceptors.request.use((config) => {

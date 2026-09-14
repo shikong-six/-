@@ -12,6 +12,8 @@
           <!-- AI 消息渲染 Markdown（marked 转 HTML + DOMPurify 消毒防 XSS），用户消息纯文本 -->
           <div v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
           <div v-else>{{ msg.content }}</div>
+          <!-- 等待期提示：检索+首 token 到达前，让用户知道没卡死 -->
+          <div v-if="msg.waiting" class="waiting-tip">正在检索法律知识库并生成回答…</div>
           <div v-if="msg.loading" class="cursor">▍</div>
 
           <!-- 引用来源：点击展开法条原文 -->
@@ -33,6 +35,8 @@
 
     <!-- 底部输入栏（适配 iPhone 底部安全区） -->
     <div class="input-bar">
+      <!-- 语音输入：浏览器不支持 Web Speech API 时自动隐藏（静默降级） -->
+      <VoiceButton v-if="speechSupported" @final="onVoiceFinal" />
       <van-field
         v-model="input"
         class="input-field"
@@ -59,6 +63,8 @@ import {showFailToast} from 'vant';
 import {marked} from 'marked';
 import DOMPurify from 'dompurify';
 import {useChatStream} from '@/composables/useChatStream';
+import {isSpeechSupported} from '@/composables/useSpeechRecognition';
+import VoiceButton from '@/components/VoiceButton.vue';
 import type {ChatMessage, Reference} from '@/services/chat';
 
 // 页面展示用的消息（比发给后端的多一些展示字段）
@@ -68,6 +74,7 @@ interface DisplayMessage {
   references?: Reference[];
   historyId?: number | null;
   loading?: boolean;  // 生成中
+  waiting?: boolean;  // 检索中（第一个 token 还没到达）
   failed?: boolean;   // 生成失败（无内容可显示）
 }
 
@@ -79,9 +86,17 @@ const sessionId = ref<number | null>(null);
 const input = ref('');
 const listEl = ref<HTMLElement | null>(null);
 const expandedRefs = ref<number | null>(null);
+// 浏览器不支持语音识别时隐藏语音按钮（静默降级，不影响文字输入）
+const speechSupported = isSpeechSupported();
 
 // SSE 流式能力（读流逻辑在 composable 里）
 const {streaming, streamChat, stop} = useChatStream();
+
+// 语音识别完成：填入输入框并自动发问
+function onVoiceFinal(text: string) {
+  input.value = text;
+  send(text);
+}
 
 // Markdown 转 HTML 并消毒（Web 端踩过的坑：v-html 必须配 DOMPurify，否则 XSS）
 function renderMarkdown(text: string): string {
@@ -114,7 +129,7 @@ async function send(text: string) {
   input.value = '';
 
   messages.value.push({role: 'user', content: question});
-  const assistantMsg: DisplayMessage = {role: 'assistant', content: '', loading: true};
+  const assistantMsg: DisplayMessage = {role: 'assistant', content: '', loading: true, waiting: true};
   messages.value.push(assistantMsg);
   scrollToBottom();
 
@@ -123,6 +138,8 @@ async function send(text: string) {
 
   await streamChat(payload, sessionId.value, {
     onToken: (token) => {
+      // 第一个 token 到达：结束等待提示，进入逐字渲染
+      assistantMsg.waiting = false;
       assistantMsg.content += token;
       scrollToBottom();
     },
@@ -135,6 +152,7 @@ async function send(text: string) {
     },
     onDone: () => {
       assistantMsg.loading = false;
+      assistantMsg.waiting = false;
       // 完成的问答对进入历史，供下一轮带上下文
       apiMessages.push(
         {role: 'user', content: question},
@@ -143,6 +161,7 @@ async function send(text: string) {
     },
     onError: (message) => {
       assistantMsg.loading = false;
+      assistantMsg.waiting = false;
       if (!assistantMsg.content) {
         assistantMsg.failed = true;
       }
@@ -213,6 +232,13 @@ onMounted(() => {
 .cursor {
   display: inline-block;
   animation: blink 0.8s infinite;
+}
+
+/* 检索等待期提示 */
+.waiting-tip {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #969799;
 }
 
 @keyframes blink {
