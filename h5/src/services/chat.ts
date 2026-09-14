@@ -1,5 +1,7 @@
 // 聊天相关类型与接口封装（与后端 /api/chat 契约对齐）
 
+import request from './request';
+
 // 引用来源：后端召回的法条块信息
 export interface Reference {
   docName: string;    // 出自哪个文档
@@ -20,7 +22,14 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-import request from './request';
+// 对话会话（对应后端 chat_sessions 表）
+export interface ChatSession {
+  id: number;           // 会话 ID
+  title: string;        // 会话标题（首问前 20 字）
+  createdAt: string;    // 创建时间
+  updatedAt: string;    // 最后活跃时间
+  messageCount: number; // 会话内消息条数
+}
 
 // 会话内的一条问答记录（加载历史会话时还原对话窗口用）
 export interface SessionMessage {
@@ -31,6 +40,15 @@ export interface SessionMessage {
   createdAt: string;   // 问答时间
 }
 
+// 查询当前用户的会话列表（按最后活跃倒序，含每个会话的消息条数）
+export async function getSessions(): Promise<ChatSession[]> {
+  const response = await request.get<ApiResponse<ChatSession[]>>('/chat/sessions');
+  if (response.data.success) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || '获取会话列表失败');
+}
+
 // 查询某个会话的消息（按时间正序，用于还原对话窗口继续问答）
 export async function getSessionMessages(sessionId: number): Promise<SessionMessage[]> {
   const response = await request.get<ApiResponse<SessionMessage[]>>(`/chat/sessions/${sessionId}/messages`);
@@ -38,4 +56,20 @@ export async function getSessionMessages(sessionId: number): Promise<SessionMess
     return response.data.data;
   }
   throw new Error(response.data.message || '获取会话消息失败');
+}
+
+// 重命名会话
+export async function renameSession(sessionId: number, title: string): Promise<void> {
+  const response = await request.put<ApiResponse<{id: number}>>(`/chat/sessions/${sessionId}`, {title});
+  if (!response.data.success) {
+    throw new Error(response.data.message || '重命名失败');
+  }
+}
+
+// 删除会话（会话和消息一起删）
+export async function deleteSession(sessionId: number): Promise<void> {
+  const response = await request.delete<ApiResponse<{id: number}>>(`/chat/sessions/${sessionId}`);
+  if (!response.data.success) {
+    throw new Error(response.data.message || '删除失败');
+  }
 }

@@ -23,6 +23,11 @@
       </div>
     </div>
 
+    <van-cell-group inset class="menu">
+      <van-cell title="问答历史" icon="clock-o" is-link @click="$router.push('/history')" />
+      <van-cell title="我的" icon="user-o" is-link @click="$router.push('/profile')" />
+    </van-cell-group>
+
     <!-- 点击场景后弹出预置问题清单 -->
     <van-action-sheet
       v-model:show="showSheet"
@@ -33,16 +38,13 @@
       @select="onSelectQuestion"
     />
 
-    <div class="logout-wrap">
-      <van-button block round size="small" plain @click="onLogout">退出登录</van-button>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import {computed, ref} from 'vue';
 import {useRouter} from 'vue-router';
-import {getUsername, logout} from '@/services/auth';
+import {getUsername} from '@/services/auth';
 import {scenarios} from '@/services/scenarios';
 import type {Scenario} from '@/services/scenarios';
 
@@ -66,12 +68,6 @@ function openScenario(s: Scenario) {
 function onSelectQuestion(action: {name: string}) {
   sessionStorage.setItem('fazhitong_pending_question', action.name);
   router.push('/ask');
-}
-
-function onLogout() {
-  logout();
-  // 守卫会自动把未登录用户送回登录页
-  router.replace('/login');
 }
 </script>
 
@@ -130,7 +126,7 @@ function onLogout() {
   line-height: 1.4;
 }
 
-.logout-wrap {
-  margin: 24px 60px;
+.menu {
+  margin-top: 16px;
 }
 </style>

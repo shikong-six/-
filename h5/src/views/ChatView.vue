@@ -58,13 +58,15 @@
 </template>
 
 <script setup lang="ts">
-import {nextTick, onMounted, ref} from 'vue';
+import {nextTick, onMounted, ref, watch} from 'vue';
+import {useRoute} from 'vue-router';
 import {showFailToast} from 'vant';
 import {marked} from 'marked';
 import DOMPurify from 'dompurify';
 import {useChatStream} from '@/composables/useChatStream';
 import {isSpeechSupported} from '@/composables/useSpeechRecognition';
 import VoiceButton from '@/components/VoiceButton.vue';
+import {getSessionMessages} from '@/services/chat';
 import type {ChatMessage, Reference} from '@/services/chat';
 
 // 页面展示用的消息（比发给后端的多一些展示字段）
@@ -86,6 +88,8 @@ const sessionId = ref<number | null>(null);
 const input = ref('');
 const listEl = ref<HTMLElement | null>(null);
 const expandedRefs = ref<number | null>(null);
+// 当前路由（取会话 ID 动态段用）
+const route = useRoute();
 // 浏览器不支持语音识别时隐藏语音按钮（静默降级，不影响文字输入）
 const speechSupported = isSpeechSupported();
 
@@ -172,12 +176,51 @@ async function send(text: string) {
 
 // 从首页场景卡片进来：读取暂存的问题，自动发问一次
 onMounted(() => {
+  const sidParam = route.params.sessionId;
+  if (sidParam) {
+    // 带会话 ID 进入：还原历史消息，继续对话
+    loadSession(Number(sidParam));
+    return;
+  }
   const pending = sessionStorage.getItem('fazhitong_pending_question');
   if (pending) {
     sessionStorage.removeItem('fazhitong_pending_question');
     send(pending);
   }
 });
+
+// 同组件内切换会话（/chat/3 → /chat/4）：组件复用不会重新挂载，必须监听参数变化重新拉消息
+// 这是 Web 端踩过的坑：动态路由刷新/切换不加载数据，根因是 onMounted 不会再执行
+watch(
+  () => route.params.sessionId,
+  (value) => {
+    if (value) {
+      loadSession(Number(value));
+    }
+  }
+);
+
+// 加载某个会话的历史消息，还原对话窗口
+async function loadSession(id: number) {
+  try {
+    const list = await getSessionMessages(id);
+    messages.value = [];
+    apiMessages.length = 0;
+    sessionId.value = id;
+    for (const item of list) {
+      messages.value.push({role: 'user', content: item.question});
+      messages.value.push({role: 'assistant', content: item.answer, historyId: item.id});
+      // 历史问答对进入上下文，续聊时带给后端
+      apiMessages.push(
+        {role: 'user', content: item.question},
+        {role: 'assistant', content: item.answer}
+      );
+    }
+    scrollToBottom();
+  } catch (e) {
+    showFailToast(e instanceof Error ? e.message : '加载会话失败');
+  }
+}
 </script>
 
 <style scoped>

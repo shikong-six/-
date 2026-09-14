@@ -22,6 +22,25 @@ const routes = [
     name: 'Ask',
     component: () => import('@/views/ChatView.vue'),
   },
+  {
+    // 智能问答：带会话 ID，加载该会话历史消息继续对话
+    // :sessionId 是动态段，组件里用 useRoute().params.sessionId 取值
+    path: '/chat/:sessionId',
+    name: 'ChatSession',
+    component: () => import('@/views/ChatView.vue'),
+  },
+  {
+    // 问答历史：会话列表（下拉刷新/滑动删除/改名）
+    path: '/history',
+    name: 'History',
+    component: () => import('@/views/HistoryView.vue'),
+  },
+  {
+    // 我的：账号信息与退出登录
+    path: '/profile',
+    name: 'Profile',
+    component: () => import('@/views/ProfileView.vue'),
+  },
 ];
 
 const router = createRouter({
