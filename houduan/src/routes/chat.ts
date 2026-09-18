@@ -212,6 +212,17 @@ ${context ? `【法律资料】\n${context}` : '（本次未检索到相关法�
         // 立即把响应头发出去（不然前端要等第一块数据才能收到头）
         res.flushHeaders();
 
+        // ===== 先推一条进度事件，再调 Kimi =====
+        // Kimi 免费档首字可能要十几秒，前端光有"正在检索"太干等；
+        // 检索已经完成，先把结果数量推给前端显示"已检索到 N 条相关资料"，
+        // 把长等待拆成"检索完成 → 生成中"两段有反馈的进度
+        res.write(`data: ${JSON.stringify({
+            type: 'status',
+            message: references.length > 0
+                ? `已检索到 ${references.length} 条相关资料，正在生成回答…`
+                : '知识库未检索到相关资料，正在生成回答…'
+        })}\n\n`);
+
         // 客户端中途断开标记（关闭页面/切走都会触发）
         let clientGone = false;
         // res close 事件：连接关闭时触发；writableEnded 为 true 说明是正常走完的，不算断开

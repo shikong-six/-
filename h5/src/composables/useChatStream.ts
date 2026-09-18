@@ -7,6 +7,7 @@ import type {ChatMessage, Reference} from '@/services/chat';
 
 // 流式过程中的回调集合
 export interface StreamHandlers {
+  onStatus: (message: string) => void;             // 检索完成，拿到进度提示（首 token 之前）
   onToken: (token: string) => void;                 // 每收到一个增量 token
   onReferences: (references: Reference[]) => void;  // 生成完毕，拿到引用来源
   onSession: (sessionId: number, historyId: number | null) => void; // 拿到会话 ID 和历史 ID
@@ -79,7 +80,10 @@ export function useChatStream() {
           const line = event.trim();
           if (!line.startsWith('data:')) continue;
           const data = JSON.parse(line.slice(5).trim());
-          if (data.type === 'token') {
+          if (data.type === 'status') {
+            // 检索完成：更新等待提示（首 token 前的阶段反馈）
+            handlers.onStatus(data.message);
+          } else if (data.type === 'token') {
             handlers.onToken(data.content);
           } else if (data.type === 'references') {
             handlers.onReferences(data.references);

@@ -12,8 +12,8 @@
           <!-- AI 消息渲染 Markdown（marked 转 HTML + DOMPurify 消毒防 XSS），用户消息纯文本 -->
           <div v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
           <div v-else>{{ msg.content }}</div>
-          <!-- 等待期提示：检索+首 token 到达前，让用户知道没卡死 -->
-          <div v-if="msg.waiting" class="waiting-tip">正在检索法律知识库并生成回答…</div>
+          <!-- 等待期提示：检索+首 token 到达前，让用户知道没卡死（status 事件会更新内容） -->
+          <div v-if="msg.waiting" class="waiting-tip">{{ msg.statusTip || '正在检索法律知识库…' }}</div>
           <div v-if="msg.loading" class="cursor">▍</div>
 
           <!-- 引用来源：点击展开法条原文 -->
@@ -75,9 +75,10 @@ interface DisplayMessage {
   content: string;
   references?: Reference[];
   historyId?: number | null;
-  loading?: boolean;  // 生成中
-  waiting?: boolean;  // 检索中（第一个 token 还没到达）
-  failed?: boolean;   // 生成失败（无内容可显示）
+  loading?: boolean;   // 生成中
+  waiting?: boolean;   // 检索中（第一个 token 还没到达）
+  statusTip?: string;  // 等待期的进度文案（status 事件更新）
+  failed?: boolean;    // 生成失败（无内容可显示）
 }
 
 const messages = ref<DisplayMessage[]>([]);
@@ -146,6 +147,10 @@ async function send(text: string) {
       assistantMsg.waiting = false;
       assistantMsg.content += token;
       scrollToBottom();
+    },
+    onStatus: (message) => {
+      // 检索完成的进度反馈：更新等待提示，把"干等首字"拆出一段可见进度
+      assistantMsg.statusTip = message;
     },
     onReferences: (refs) => {
       assistantMsg.references = refs;
@@ -277,11 +282,34 @@ async function loadSession(id: number) {
   animation: blink 0.8s infinite;
 }
 
-/* 检索等待期提示 */
+/* 检索等待期提示（省略号滚动动画，证明页面没卡死） */
 .waiting-tip {
   margin-top: 4px;
   font-size: 13px;
   color: #969799;
+}
+
+.waiting-tip::after {
+  display: inline-block;
+  width: 1.5em;
+  text-align: left;
+  animation: dots 1.2s steps(4, end) infinite;
+  content: '';
+}
+
+@keyframes dots {
+  0% {
+    content: '';
+  }
+  25% {
+    content: '·';
+  }
+  50% {
+    content: '··';
+  }
+  75% {
+    content: '···';
+  }
 }
 
 @keyframes blink {
