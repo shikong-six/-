@@ -89,7 +89,7 @@
 </template>
 <script setup lang="ts">
 // 从 vue 中引入响应式 API、nextTick(等DOM更新后再滚动)和生命周期钩子
-import {ref,nextTick,onMounted,watch} from 'vue'
+import {ref,nextTick,onMounted,watch,reactive} from 'vue'
 // 引入路由：读会话 ID 参数、跳转
 import {useRoute,useRouter} from 'vue-router'
 // 引入 Element Plus 的消息提示
@@ -289,7 +289,8 @@ const sendMessage=async ()=>{
     inputMessage.value=''
 
     // 先占位一条空的 AI 消息，token 到了往里面填
-    const assistantMessage: Message = {role: 'assistant', content: ''};
+    // 注意：必须用 reactive() 包一层——普通对象 push 进数组后，直接改原对象不会触发视图更新
+    const assistantMessage: Message = reactive({role: 'assistant', content: ''});
     messages.value.push(assistantMessage);
 
     // 标记正在加载

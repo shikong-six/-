@@ -59,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import {nextTick, onMounted, ref, watch} from 'vue';
+import {nextTick, onMounted, reactive, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import {showFailToast} from 'vant';
 import {marked} from 'marked';
@@ -183,7 +183,9 @@ async function send(text: string) {
   flushTypewriter();
 
   messages.value.push({role: 'user', content: question});
-  const assistantMsg: DisplayMessage = {role: 'assistant', content: '', loading: true, waiting: true};
+  // 必须用 reactive() 包一层：普通对象 push 进数组后，直接改原对象不经过 Proxy，
+  // 不会触发依赖通知——流式逐字渲染会失效，最后整段一次性蹦出
+  const assistantMsg = reactive<DisplayMessage>({role: 'assistant', content: '', loading: true, waiting: true});
   messages.value.push(assistantMsg);
   scrollToBottom();
 
