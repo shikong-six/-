@@ -81,6 +81,7 @@ export async function sendMessageStream(
   messages: ChatMessage[],
   sessionId: number | null,
   callbacks: {
+    onStatus?: (message: string) => void;             // 检索完成的进度反馈（首 token 之前；可选）
     onToken: (token: string) => void;
     onReferences: (references: Reference[]) => void;
     onSession: (sessionId: number | null, historyId: number | null) => void;
@@ -137,8 +138,11 @@ export async function sendMessageStream(
       if (!line.startsWith('data:')) continue;
       // 解析 data 后面的 JSON
       const data = JSON.parse(line.slice(5).trim());
-      // token 事件：把内容抛给页面逐字渲染
-      if (data.type === 'token') {
+      // status 事件：检索完成的进度反馈（可选回调，没传就跳过）
+      if (data.type === 'status') {
+        callbacks.onStatus?.(data.message);
+      } else if (data.type === 'token') {
+        // token 事件：把内容抛给页面逐字渲染
         callbacks.onToken(data.content);
       } else if (data.type === 'references') {
         // 引用来源：生成完毕，交给页面展示

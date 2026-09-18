@@ -66,8 +66,8 @@
         </div>
       </div>
 
-      <!-- 流式等待提示：检索阶段显示，token 开始输出后隐藏（能看到逐字输出本身就是反馈） -->
-      <div v-if="loading" class="streaming-hint">正在检索法律知识库…</div>
+      <!-- 流式等待提示：检索阶段显示，首 token 开始输出后隐藏（能看到逐字输出本身就是反馈） -->
+      <div v-if="loading && !streamingStarted" class="streaming-hint">{{ statusText || '正在检索法律知识库…' }}</div>
 
       <!-- 输入区域 -->
       <div class="input-area">
@@ -96,6 +96,8 @@ import {useRoute,useRouter} from 'vue-router'
 import {ElMessage} from 'element-plus'
 // 引入 marked：把 Kimi 返回的 Markdown 文本转成 HTML
 import {marked} from 'marked'
+// 引入 DOMPurify：v-html 渲染前消毒，防 XSS（AI 返回的内容不可信）
+import DOMPurify from 'dompurify'
 // 引入聊天 API：流式发送 + 会话相关接口 + 反馈接口
 import {sendMessageStream,getSessions,getSessionMessages,setFeedback} from '../services/chat'
 // 引入会话类型
@@ -149,9 +151,54 @@ const openReference=(reference:Reference)=>{
 }
 
 // 把 Markdown 文本转成 HTML（async:false 表示同步返回字符串）
+// DOMPurify 消毒：v-html 直接注入 AI 返回的内容，不消毒就是 XSS 敞口
 const renderMarkdown=(text:string):string=>{
-    return marked.parse(text,{async:false})as string
+    return DOMPurify.sanitize(marked.parse(text,{async:false})as string)
 }
+
+// 流式等待期的进度文案（status 事件更新；首 token 到达后整个提示隐藏）
+const statusText=ref('')
+// 首 token 是否已到达（到了就隐藏等待提示——逐字输出本身就是反馈）
+const streamingStarted=ref(false)
+
+// ===== 打字机效果 =====
+// Kimi API 按块突发下发（一次 8 个字同一毫秒到达），直接渲染会像"一大块冒出"；
+// token 先存队列，定时器按固定节奏逐字弹出，视觉上匀速输出
+let typeQueue='';
+let typeTimer: ReturnType<typeof setInterval>|null=null;
+let typingTarget: Message|null=null;
+
+// 喂字：token 入队，节奏由定时器控制
+const feedTypewriter=(msg: Message, text: string)=>{
+  typeQueue+=text;
+  typingTarget=msg;
+  if(typeTimer)return;
+  typeTimer=setInterval(()=>{
+    // 目标被清出消息列表（切换会话/新对话）就停掉，避免给游离对象喂字
+    if(!typingTarget||!messages.value.includes(typingTarget)){
+      stopTypewriter();
+      return;
+    }
+    // 每 30ms 吐出 2 个字（约 60 字/秒，接近真人打字速度）
+    typingTarget.content+=typeQueue.slice(0,2);
+    typeQueue=typeQueue.slice(2);
+    scrollToBottom();
+    if(!typeQueue)stopTypewriter();
+  },30);
+};
+
+// 停掉定时器并复位（队列剩余内容是否保留由调用方决定）
+const stopTypewriter=()=>{
+  if(typeTimer){clearInterval(typeTimer);typeTimer=null;}
+  typingTarget=null;
+  typeQueue='';
+};
+
+// 冲刷：队列里剩余的字一次性倒完（流结束/出错时调用，保证内容完整）
+const flushTypewriter=()=>{
+  if(typingTarget&&typeQueue){typingTarget.content+=typeQueue;}
+  stopTypewriter();
+};
 
 //滚动到消息列表底部(新消息出现时调用)
 //节流：同一帧内只滚一次。流式输出时 token 高频到达，每次都 nextTick+滚动会浪费渲染开销
@@ -293,6 +340,11 @@ const sendMessage=async ()=>{
     const assistantMessage: Message = reactive({role: 'assistant', content: ''});
     messages.value.push(assistantMessage);
 
+    // 复位等待提示与打字状态（上次流结束但队列未排空时，先把剩余的字倒完）
+    flushTypewriter();
+    statusText.value='';
+    streamingStarted.value=false;
+
     // 标记正在加载
     loading.value=true
     try{
@@ -300,10 +352,14 @@ const sendMessage=async ()=>{
       // 注意只传占位消息之前的部分（后端取最后一条当问题，不能把空的 AI 占位传过去）
       // sessionId 传当前会话：新对话为 null（后端自动建会话），旧对话沿用
       await sendMessageStream(messages.value.slice(0, -1), currentSessionId.value, {
-        // 每收到一个 token：追加到 AI 消息末尾并滚动到底
+        // 检索完成的进度反馈：更新等待提示，把"干等首字"拆出一段可见进度
+        onStatus: (message: string) => {
+          statusText.value = message;
+        },
+        // 每收到一个 token：交给打字机逐字渲染并滚动到底
         onToken: (token: string) => {
-          assistantMessage.content += token;
-          scrollToBottom();
+          streamingStarted.value = true;
+          feedTypewriter(assistantMessage, token);
         },
         // 生成完毕：把引用来源挂到这条消息上（气泡下方出现可点击的引用）
         onReferences: (refs: Reference[]) => {
@@ -323,8 +379,11 @@ const sendMessage=async ()=>{
           loadSessions();
         }
       });
+      // 流已结束：打字机队列里剩余的字一次性倒完，保证消息内容完整（入库/续聊用的是这条内容）
+      flushTypewriter();
     }catch(error:any){
-      // 失败：占位消息里显示错误原因
+      // 失败：停掉打字机，占位消息里显示错误原因
+      stopTypewriter();
       assistantMessage.content='出错了：'+error.message;
       scrollToBottom()
     }finally{
