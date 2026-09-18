@@ -17,6 +17,8 @@ export default defineConfig({
   },
   server: {
     port: 8081,
+    // 监听局域网 IP：手机连同一 WiFi 可直接访问 http://<电脑IP>:8081 做真机调试
+    host: true,
     // 所有 /api 请求代理到后端（与 Web 端 webpack devServer 同思路）
     proxy: {
       '/api': {
