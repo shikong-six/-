@@ -1,5 +1,6 @@
 // 引入 axios，用于发送 HTTP 请求
 import axios from 'axios';
+import {TextDecoder} from 'node:util';
 
 // 从环境变量读取 Kimi 的基础地址
 const BASE_URL = process.env.KIMI_BASE_URL || 'https://api.moonshot.cn/v1';
@@ -85,6 +86,10 @@ export async function chatWithKimiStream(
   let fullReply = '';
   // 缓存没处理完的半行数据（网络分包可能把一行 SSE 切成两次 chunk）
   let buffer = '';
+  // 增量解码器：多字节字符（如中文，3 字节）可能被拆在两个 chunk 里，
+  // 必须用它按流解码（stream:true 会把半个字符的字节留到下次），
+  // 用 chunk.toString('utf8') 则会把它替换成乱码 �
+  const decoder = new TextDecoder('utf-8');
 
   // 等流结束：包一层 Promise，流的 data/end/error 事件都在这里处理
   await new Promise<void>((resolve, reject) => {
@@ -95,8 +100,8 @@ export async function chatWithKimiStream(
         response.data.destroy();
         return;
       }
-      // 转字符串并拼进缓存
-      buffer += chunk.toString('utf8');
+      // 增量解码：半个多字节字符的字节会留在解码器里等下一个 chunk
+      buffer += decoder.decode(chunk, {stream: true});
       // 按行切开，最后一段可能是半行，先留回缓存
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
@@ -127,7 +132,11 @@ export async function chatWithKimiStream(
       }
     });
     // 流正常结束（end 是 close 之前触发的"读完"信号）
-    response.data.on('end', () => resolve());
+    response.data.on('end', () => {
+      // 冲刷解码器：把流末尾可能残留的半个字符解码完（正常情况 buffer 已是空串）
+      buffer += decoder.decode();
+      resolve();
+    });
     // 流被销毁（客户端断开时主动 destroy 会走到这里）
     response.data.on('close', () => resolve());
     // 流异常中断
