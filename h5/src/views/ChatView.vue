@@ -14,7 +14,8 @@
           <div v-else>{{ msg.content }}</div>
           <!-- 等待期提示：检索+首 token 到达前，让用户知道没卡死（status 事件会更新内容） -->
           <div v-if="msg.waiting" class="waiting-tip">{{ msg.statusTip || '正在检索法律知识库…' }}</div>
-          <div v-if="msg.loading" class="cursor">▍</div>
+          <!-- 光标：生成中或打字机吐字中都显示 -->
+          <div v-if="msg.loading || msg.typing" class="cursor">▍</div>
 
           <!-- 引用来源：点击展开法条原文 -->
           <div v-if="msg.references && msg.references.length > 0" class="refs">
@@ -75,7 +76,8 @@ interface DisplayMessage {
   content: string;
   references?: Reference[];
   historyId?: number | null;
-  loading?: boolean;   // 生成中
+  loading?: boolean;   // 生成中（后端流未结束）
+  typing?: boolean;    // 打字机正在吐字（流已结束但队列未排空）
   waiting?: boolean;   // 检索中（第一个 token 还没到达）
   statusTip?: string;  // 等待期的进度文案（status 事件更新）
   failed?: boolean;    // 生成失败（无内容可显示）
@@ -127,11 +129,58 @@ function toggleRefs(index: number) {
   expandedRefs.value = expandedRefs.value === index ? null : index;
 }
 
+// ===== 打字机效果 =====
+// Kimi API 按块突发下发（一次 8 个字同一毫秒到达），直接渲染会像"一大块冒出"；
+// 这里把收到的 token 先存进队列，定时器按固定节奏逐字弹出，视觉上匀速输出
+let typeQueue = '';                              // 待吐出的字
+let typeTimer: ReturnType<typeof setInterval> | null = null;
+let typingTarget: DisplayMessage | null = null;  // 正在打字的消息
+
+// 喂字：token 先排队，节奏由定时器控制
+function feedTypewriter(msg: DisplayMessage, text: string) {
+  typeQueue += text;
+  typingTarget = msg;
+  msg.typing = true;
+  if (typeTimer) return;
+  typeTimer = setInterval(() => {
+    if (!typingTarget) {
+      stopTypewriter();
+      return;
+    }
+    // 每 30ms 吐出 2 个字（约 60 字/秒，接近真人打字速度）
+    typingTarget.content += typeQueue.slice(0, 2);
+    typeQueue = typeQueue.slice(2);
+    scrollToBottom();
+    if (!typeQueue) stopTypewriter();
+  }, 30);
+}
+
+// 停掉定时器并复位状态（队列剩余内容是否保留由调用方决定）
+function stopTypewriter() {
+  if (typeTimer) {
+    clearInterval(typeTimer);
+    typeTimer = null;
+  }
+  if (typingTarget) typingTarget.typing = false;
+  typingTarget = null;
+  typeQueue = '';
+}
+
+// 冲刷：把队列里剩余的字一次性倒完（流结束/出错时调用，保证内容完整）
+function flushTypewriter() {
+  if (typingTarget && typeQueue) {
+    typingTarget.content += typeQueue;
+  }
+  stopTypewriter();
+}
+
 // 发送问题
 async function send(text: string) {
   const question = text.trim();
   if (!question || streaming.value) return;
   input.value = '';
+  // 上一条如果还在打字（流已结束但队列未排空），先把剩余的字倒完再发新问
+  flushTypewriter();
 
   messages.value.push({role: 'user', content: question});
   const assistantMsg: DisplayMessage = {role: 'assistant', content: '', loading: true, waiting: true};
@@ -143,10 +192,9 @@ async function send(text: string) {
 
   await streamChat(payload, sessionId.value, {
     onToken: (token) => {
-      // 第一个 token 到达：结束等待提示，进入逐字渲染
+      // 第一个 token 到达：结束等待提示，交给打字机逐字渲染
       assistantMsg.waiting = false;
-      assistantMsg.content += token;
-      scrollToBottom();
+      feedTypewriter(assistantMsg, token);
     },
     onStatus: (message) => {
       // 检索完成的进度反馈：更新等待提示，把"干等首字"拆出一段可见进度
@@ -162,6 +210,7 @@ async function send(text: string) {
     onDone: () => {
       assistantMsg.loading = false;
       assistantMsg.waiting = false;
+      flushTypewriter();  // 队列里剩余的字一次性倒完，保证内容完整
       // 完成的问答对进入历史，供下一轮带上下文
       apiMessages.push(
         {role: 'user', content: question},
@@ -171,6 +220,7 @@ async function send(text: string) {
     onError: (message) => {
       assistantMsg.loading = false;
       assistantMsg.waiting = false;
+      flushTypewriter();  // 部分生成也保留，剩余队列倒完
       if (!assistantMsg.content) {
         assistantMsg.failed = true;
       }
