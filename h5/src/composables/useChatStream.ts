@@ -4,6 +4,7 @@
 //                        / session（会话ID+历史ID）/ done（结束）/ error（中途出错）
 import {ref} from 'vue';
 import type {ChatMessage, Reference} from '@/services/chat';
+import {useUserStore} from '@/store/user';
 
 // 流式过程中的回调集合
 export interface StreamHandlers {
@@ -39,8 +40,8 @@ export function useChatStream() {
     abortController.signal.addEventListener('abort', onAbort, {once: true});
 
     try {
-      // 从本地存储取 token（fetch 不走 Axios 拦截器，手动带）
-      const token = localStorage.getItem('fazhitong_token');
+      // 从 user store 取 token（fetch 不走 Axios 拦截器，手动带）
+      const token = useUserStore().token;
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: {
@@ -53,7 +54,7 @@ export function useChatStream() {
 
       // 401 处理（对齐 request.ts 拦截器：清凭证跳登录）
       if (response.status === 401) {
-        localStorage.removeItem('fazhitong_token');
+        useUserStore().logout();
         if (window.location.hash !== '#/login') {
           window.location.hash = '#/login';
         }
