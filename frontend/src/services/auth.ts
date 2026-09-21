@@ -1,5 +1,7 @@
 // 用户认证 API 封装：注册、登录、退出、token 存取
+// 登录态本身由 Pinia 的 user store 统一管理（src/store/user.ts），这里只负责调接口和写入 store
 import request from './request';
+import {useUserStore} from '../store/user';
 
 // 登录/注册成功的返回数据
 interface AuthResponse {
@@ -11,16 +13,12 @@ interface AuthResponse {
   message?: string;
 }
 
-// localStorage 里存 token 的键名
-const TOKEN_KEY = 'fazhitong_token';
-const USERNAME_KEY = 'fazhitong_username';
-
 // 注册（注册成功后端直接返回 token，即注册即登录）
 export async function register(username: string, password: string): Promise<void> {
   const response = await request.post<AuthResponse>('/auth/register', {username, password});
   if (response.data.success) {
-    // 把凭证存到本地
-    saveAuth(response.data.data.token, response.data.data.username);
+    // 凭证写入 user store（store 内部同时落 localStorage 持久化）
+    useUserStore().saveAuth(response.data.data.token, response.data.data.username);
     return;
   }
   throw new Error(response.data.message || '注册失败');
@@ -30,30 +28,25 @@ export async function register(username: string, password: string): Promise<void
 export async function login(username: string, password: string): Promise<void> {
   const response = await request.post<AuthResponse>('/auth/login', {username, password});
   if (response.data.success) {
-    saveAuth(response.data.data.token, response.data.data.username);
+    useUserStore().saveAuth(response.data.data.token, response.data.data.username);
     return;
   }
   throw new Error(response.data.message || '登录失败');
 }
 
+// ===== 以下三个是 user store 的便捷代理：老调用方（页面/路由守卫）无需改动 =====
+
 // 退出登录：清掉本地凭证即可（JWT 无状态，服务端不需要通知）
 export function logout(): void {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USERNAME_KEY);
+  useUserStore().logout();
 }
 
-// 是否已登录（本地有没有 token）
+// 是否已登录
 export function isLoggedIn(): boolean {
-  return !!localStorage.getItem(TOKEN_KEY);
+  return useUserStore().isLoggedIn;
 }
 
 // 当前登录用户名（用于页面顶部显示）
 export function getUsername(): string {
-  return localStorage.getItem(USERNAME_KEY) || '';
-}
-
-// 保存登录凭证
-function saveAuth(token: string, username: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USERNAME_KEY, username);
+  return useUserStore().username;
 }
