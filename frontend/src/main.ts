@@ -15,9 +15,10 @@ import store from './store';
  const app=createApp(App);
  // 注册 Element Plus
  app.use(ElementPlus);
+ // 注册状态管理：必须先于路由——路由守卫和组件 setup 里会用到 store，
+ // 而 app.use(router) 会立即触发首次导航，pinia 未装时 useStore() 会抛错导致白屏
+ app.use(store);
  // 注册路由
  app.use(router);
- // 注册状态管理
- app.use(store);
  // 挂载到 index.html 中的 #app 节点
  app.mount('#app');
