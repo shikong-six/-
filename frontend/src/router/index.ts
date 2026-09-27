@@ -62,6 +62,18 @@ const routes = [
         ]
       },
       {
+        // 个人中心：账号信息与常用入口
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/ProfileView.vue')
+      },
+      {
+        // 案例库（占位，内容建设中）
+        path: 'cases',
+        name: 'Cases',
+        component: () => import('@/views/CasesView.vue')
+      },
+      {
         // 会话历史管理（改名/删除/跳转继续对话）
         path: 'history',
         name: 'History',
