@@ -64,10 +64,19 @@
             <el-icon><HomeFilled /></el-icon>
             <span>首页</span>
           </el-menu-item>
-          <el-menu-item index="/cases">
-            <el-icon><Document /></el-icon>
-            <span>案例</span>
-          </el-menu-item>
+          <!-- 案例：展开六大分类（嵌套路由 /cases/:category） -->
+          <el-sub-menu index="/cases">
+            <template #title>
+              <el-icon><Document /></el-icon>
+              <span>案例</span>
+            </template>
+            <el-menu-item index="/cases/marriage"><span>婚姻家庭</span></el-menu-item>
+            <el-menu-item index="/cases/traffic"><span>交通事故</span></el-menu-item>
+            <el-menu-item index="/cases/contract"><span>合同纠纷</span></el-menu-item>
+            <el-menu-item index="/cases/labor"><span>劳动纠纷</span></el-menu-item>
+            <el-menu-item index="/cases/property"><span>房产物业</span></el-menu-item>
+            <el-menu-item index="/cases/criminal"><span>刑事辩护</span></el-menu-item>
+          </el-sub-menu>
           <el-menu-item index="/knowledge/list">
             <el-icon><Collection /></el-icon>
             <span>法律条文</span>

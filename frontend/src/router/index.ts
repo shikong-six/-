@@ -68,10 +68,19 @@ const routes = [
         component: () => import('@/views/ProfileView.vue')
       },
       {
-        // 案例库（占位，内容建设中）
+        // 案例库：外壳页（顶部搜索栏）+ 嵌套子路由（六大分类）
+        // 访问 /cases 默认落到婚姻家庭分类
         path: 'cases',
-        name: 'Cases',
-        component: () => import('@/views/CasesView.vue')
+        component: () => import('@/views/CasesView.vue'),
+        redirect: '/cases/marriage',
+        children: [
+          {
+            // 分类案例列表：/cases/marriage、/cases/traffic 等
+            path: ':category',
+            name: 'CaseCategory',
+            component: () => import('@/views/CaseCategoryView.vue')
+          }
+        ]
       },
       {
         // 会话历史管理（改名/删除/跳转继续对话）
