@@ -49,6 +49,8 @@ module.exports={
         hot:true,
         open:true,
         historyApiFallback:true,
+        // dev 下禁止缓存：bundle.js 文件名无 hash，浏览器缓存旧包会导致改了代码刷新也不生效（白屏/旧行为）
+        headers:{'Cache-Control':'no-store'},
         // 关闭 gzip 压缩：v5 默认开启，压缩中间件会攒住 SSE 流、结束才一次性刷出，
         // 导致流式问答在 dev 代理下退化成"一大块冒出"
         compress:false,
