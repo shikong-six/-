@@ -1,26 +1,42 @@
-# 整站白屏：Pinia 晚于路由安装，路由守卫里 useStore() 抛错
+# 整站白屏（双根因）：深链下 bundle.js 相对路径 404 + Pinia 安装顺序隐患
+
+## ⚠️ 勘误（先看这个）
+
+初版记录把白屏归因于"Pinia 晚于路由安装"，是**不完整诊断**——当时没看浏览器控制台就下了结论。真正的元凶是 **webpack `publicPath` 缺失导致深链下 `bundle.js` 404**：直接访问 `/cases/marriage` 时，index.html 里相对路径的 `bundle.js` 被浏览器解析成 `/cases/bundle.js` → 404 → historyApiFallback 返回 HTML → MIME 类型 `text/html` 拒绝执行 → JS 根本没运行 → 白屏。
+
+Pinia 顺序问题**同时真实存在**（守卫里 `useStore()` 在 pinia 未激活时会抛错，是必炸的隐患），也一并修了，但它不是这次白屏的直接原因——bundle 都没加载，根本轮不到守卫执行。两次误判合并成一次完整修复。
+
+**教训置顶：白屏排查第一步不是猜，是让客户/自己打开控制台看第一条红字。** 本记录的"排查步骤"一节后补了正确版本。
 
 ## 问题现象
 
-Web 端打开任何页面都是**白屏**，地址栏正常、页面标题正常，DevTools 的 Elements 里 `<div id="app">` 是空的（Vue 根本没渲染），控制台报 7 个错。dev server 日志显示 `compiled successfully`——**编译没有任何报错，是运行时崩的**。
+Web 端打开任何页面都是**白屏**，地址栏正常、页面标题正常，DevTools 的 Elements 里 `<div id="app">` 是空的（Vue 根本没渲染），控制台报错。dev server 日志显示 `compiled successfully`——**编译没有任何报错，是资源加载/运行时问题**。
 
-## 排查步骤（按这个顺序可以十分钟定位）
+## 排查步骤（正确版本——白屏排查第一件事是看控制台）
 
-1. **先看构建/编译层**：dev server 日志 `compiled successfully` → 排除语法错误、类型错误、缺文件
-2. **再看 DOM**：Elements 里 `#app` 为空 → Vue 没渲染，不是样式问题（样式问题会有 DOM 只是看不见）
-3. **缩小范围**：白屏发生在路由页面 → 嫌疑集中在三处：main.ts 启动流程、路由守卫、根组件 setup
-4. **时间线回溯**：这个 bug 是什么时候引入的？上一次浏览器里还是好的，之后动过的是"登录态接 Pinia"改造 → 新引入的依赖是 Pinia
-5. **看启动顺序**（`main.ts`）：
+1. **打开浏览器控制台看第一条红字**——本案例它就是答案：`Failed to load resource: 404 bundle.js` + `Refused to execute script from '.../cases/bundle.js' because its MIME type ('text/html') is not executable`。**资源加载失败和代码运行错误，控制台一条就能区分**
+2. **核对浏览器实际请求的 URL**（Network 面板）：请求的是 `/cases/bundle.js` 而非 `/bundle.js`——相对路径被当前 URL 带偏了
+3. 顺着线索查 `webpack.config.js`：output 没有 `publicPath`，HtmlWebpackPlugin 注入的就是相对路径 `bundle.js`
+4. **时间线回溯辅助定位"什么时候坏的"**：直接访问深层路由（/cases/marriage）才触发；从根路径 / 进入再点菜单（客户端路由切换）不触发——所以"项目看着好好的，一刷新深链就白"
 
-```ts
-app.use(ElementPlus);
-app.use(router);   // ← 第 19 行：路由先装
-app.use(store);    // ← 第 21 行：Pinia 后装
+> 初版记录在这里走了弯路：跳过第 1 步直接做了"时间线回溯"，把锅扣给了 Pinia 顺序——方向对了一半但真凶漏了。**猜之前先看控制台。**
+
+## 问题原因（两个，叠加存在）
+
+### 元凶：publicPath 缺失，深链下 bundle 404
+
+```
+浏览器地址栏访问 /cases/marriage
+  → dev server historyApiFallback 返回 index.html（内容里有 <script src="bundle.js">）
+  → 浏览器按当前 URL 解析相对路径：/cases/ + bundle.js = /cases/bundle.js
+  → dev server 没有这个文件 → 404 → fallback 又返回 index.html
+  → 响应头 Content-Type: text/html → 浏览器拒绝当脚本执行
+  → JS 完全没运行 → #app 空白
 ```
 
-顺序一摆出来，原因立刻可见。
+根路径 / 访问正常（解析为 /bundle.js 恰好对），所以从首页点进去一切正常、一刷新或直接开深链就白屏——这解释了为什么这个 bug 潜伏了很久才暴露。
 
-## 问题原因
+### 隐患：Pinia 晚于路由安装（同样真实存在，已一并修复）
 
 `app.use(router)` 不只是"注册路由"——**它会立即触发首次导航**（vue-router 4 的 install 行为）。首次导航要执行全局守卫：
 
@@ -40,27 +56,39 @@ app.use(router)
 
 **为什么只有 Web 端炸**：H5 的 main.ts 写法是 `app.use(createPinia())` 在前、router 在后，顺序正确。两端同构代码，一端正一端炸——这类问题只能靠**每个端各自真开浏览器验证**才能发现。
 
-## 解决方法
+## 解决方法（两处都改）
 
-`main.ts` 调整安装顺序：**Pinia 先于路由**：
+**① webpack `output.publicPath: '/'`（真元凶的修复）**——资源引用固定从根路径解析，与当前页面 URL 无关：
+
+```js
+output: {
+  path: path.resolve(__dirname, 'dist'),
+  filename: 'bundle.js',
+  publicPath: '/',   // history 深链（/cases/marriage）下，index.html 的 bundle.js 才会解析到 /bundle.js
+  clean: true
+}
+```
+
+**② main.ts 调整安装顺序（隐患修复，仍然必要）**——Pinia 先于路由：
 
 ```ts
-const app = createApp(App);
 app.use(ElementPlus);
-app.use(store);    // 状态管理先装：守卫和组件 setup 里会用到 store
+app.use(store);    // 状态管理先装
 app.use(router);   // 路由后装：它会立即触发首次导航
 app.mount('#app');
 ```
 
-改完 HMR 自动生效，浏览器刷新即恢复。
+**③ dev server 顺手加 `headers: {'Cache-Control': 'no-store'}`**——bundle 文件名无 hash，浏览器缓存旧包会让"已修复"看起来像"没修复"，排查时多绕一圈。
 
 ## 经验总结
 
-- **app.use 的顺序有语义**：任何会被"路由守卫 / 组件 setup"用到的插件（Pinia、i18n、权限指令），必须装在 router 之前。口诀：**被路由依赖的，先于路由；路由是启动流程的最后一步**（mount 前）
-- **运行时错误静态检查抓不到**：type-check 绿、build 绿 ≠ 页面能打开。凡是动了"启动流程、全局守卫、根组件"的改动，必须浏览器里真点一次
-- **多端同构要逐端验证**：同一套逻辑在两个工程里，安装顺序、引入方式可能有细微差别（这个项目的 main.ts 就是两端不同人不同时间写的）。一端验证通过 ≠ 另一端通过
-- **白屏排查三件套**：编译日志 → #app 有没有 DOM → 时间线回溯最近改动。这套顺序适用几乎所有 Vue/React 白屏
+- **白屏排查第一步永远是控制台第一条红字**，不是猜、不是时间线回溯。本案例控制台一眼可见：`/cases/bundle.js` 404 + MIME 拒绝执行
+- **history 模式 + 相对路径资源 = 深链白屏经典组合**：`output.publicPath` 必须显式设为 `'/'`，或保证所有资源引用绝对路径
+- **app.use 的顺序有语义**：任何会被"路由守卫 / 组件 setup"用到的插件（Pinia、i18n），必须装在 router 之前
+- **运行时问题静态检查抓不到**：type-check / build 全绿 ≠ 页面能开；动了启动流程、路由、构建配置，必须浏览器实测
+- **多端同构要逐端验证**：H5 的 main.ts 顺序本来就对、Vite 的 publicPath 行为也不同——同一逻辑在不同工程的表现可能完全不同
+- **缓存是排查的搅局者**：dev 下给 bundle 加 no-store，或至少记住"改了代码没变化先 Ctrl+F5"
 
 ## 一句话总结
 
-Pinia 晚于 vue-router 安装，首次导航的守卫里调 `useStore()` 时 Pinia 还没激活，抛错导致导航失败、整站白屏；把 `app.use(store)` 提到 `app.use(router)` 之前即可。教训：**改动全局守卫/启动流程后，必须浏览器实测，且多端项目要逐端测。**
+history 模式下深链访问时，相对路径的 `bundle.js` 被解析成 `/cases/bundle.js` 导致 404、JS 未运行而整站白屏；修复是 `output.publicPath: '/'`（顺带修掉 Pinia 晚于路由安装的隐患）。**白屏排查：先看控制台第一条红字，再谈其他。**

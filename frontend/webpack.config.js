@@ -7,6 +7,9 @@ module.exports={
     output:{
         path:path.resolve(__dirname,'dist'),
         filename:'bundle.js',
+        // 资源根路径固定为 /：history 模式下深链（/cases/marriage）访问时，
+        // index.html 里的相对路径 bundle.js 会被解析成 /cases/bundle.js 导致 404 白屏
+        publicPath:'/',
         clean:true
     },
     resolve:{
