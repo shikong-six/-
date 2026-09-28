@@ -42,19 +42,10 @@ const routes = [
         component: () => import('@/views/ChatView.vue')
       },
       {
-        // 法律条文库：外壳页（顶部搜索栏）+ 嵌套子路由（六大模块）
-        // 访问 /laws 默认落到婚姻家庭模块
+        // 法律条文库：单页内嵌模块分块（顶部模块切换 + 搜索 + 法条列表）
         path: 'laws',
-        component: () => import('@/views/LawsView.vue'),
-        redirect: '/laws/marriage',
-        children: [
-          {
-            // 模块法条列表：/laws/marriage、/laws/traffic 等
-            path: ':category',
-            name: 'LawCategory',
-            component: () => import('@/views/LawCategoryView.vue')
-          }
-        ]
+        name: 'Laws',
+        component: () => import('@/views/LawsView.vue')
       },
       {
         // 知识库：一级父路由，本身不渲染页面，访问 /knowledge 时重定向到列表页

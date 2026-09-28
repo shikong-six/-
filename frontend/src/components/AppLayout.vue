@@ -77,19 +77,11 @@
             <el-menu-item index="/cases/property"><span>房产物业</span></el-menu-item>
             <el-menu-item index="/cases/criminal"><span>刑事辩护</span></el-menu-item>
           </el-sub-menu>
-          <!-- 法律条文：展开六大模块（嵌套路由 /laws/:category），不再挂文档上传 -->
-          <el-sub-menu index="/laws">
-            <template #title>
-              <el-icon><Collection /></el-icon>
-              <span>法律条文</span>
-            </template>
-            <el-menu-item index="/laws/marriage"><span>婚姻家庭</span></el-menu-item>
-            <el-menu-item index="/laws/traffic"><span>交通事故</span></el-menu-item>
-            <el-menu-item index="/laws/contract"><span>合同纠纷</span></el-menu-item>
-            <el-menu-item index="/laws/labor"><span>劳动纠纷</span></el-menu-item>
-            <el-menu-item index="/laws/property"><span>房产物业</span></el-menu-item>
-            <el-menu-item index="/laws/criminal"><span>刑事辩护</span></el-menu-item>
-          </el-sub-menu>
+          <!-- 法律条文：单一项，模块在页面内嵌分块切换 -->
+          <el-menu-item index="/laws">
+            <el-icon><Collection /></el-icon>
+            <span>法律条文</span>
+          </el-menu-item>
           <el-menu-item index="/chat" data-title="AI咨询">
             <el-icon><ChatDotRound /></el-icon>
             <span>AI咨询</span>
