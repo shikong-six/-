@@ -71,10 +71,6 @@
 
       <!-- 输入区域 -->
       <div class="input-area">
-        <!-- 上传文档按钮：弹出上传弹窗，边问边传 -->
-        <el-button class="attach-btn" title="上传法律文档" @click="uploadDialogVisible = true">
-          <el-icon><Paperclip /></el-icon>
-        </el-button>
         <!-- 输入框，按回车也能发送 -->
         <el-input v-model="inputMessage" type="textarea" :rows="3" placeholder="请输入您的问题，例如：劳动合同到期不续签怎么赔偿？"
         @keyup.enter="sendMessage"/>
@@ -82,40 +78,6 @@
           发送
         </el-button>
       </div>
-
-      <!-- 文档上传弹窗：上传后自动解析入库，可直接就该文档提问 -->
-      <el-dialog v-model="uploadDialogVisible" title="上传法律文档" width="480px">
-        <!-- 文件选择：不自动上传，选完文件后手动点按钮（与知识库管理页同一套路） -->
-        <el-upload
-          drag
-          action=""
-          :auto-upload="false"
-          :show-file-list="false"
-          :on-change="handleFileChange"
-        >
-          <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-          <div class="el-upload__text">
-            拖拽文件到此处，或 <em>点击选择</em>
-          </div>
-          <template #tip>
-            <div class="el-upload__tip">
-              支持 PDF、Word、TXT，单个文件不超过 20MB；上传后自动解析、分块、向量化入库
-            </div>
-          </template>
-        </el-upload>
-        <!-- 已选文件 + 上传按钮 -->
-        <div class="upload-actions">
-          <span v-if="selectedFile" class="selected-file">已选择：{{ selectedFile.name }}</span>
-          <el-button
-            type="primary"
-            :loading="uploading"
-            :disabled="!selectedFile"
-            @click="doUpload"
-          >
-            {{ uploading ? '正在解析入库…' : '上传并入库' }}
-          </el-button>
-        </div>
-      </el-dialog>
 
       <!-- 引用来源弹窗：展示被点击引用的法条原文 -->
       <el-dialog v-model="refDialogVisible" :title="refDialogTitle" width="600px">
@@ -141,9 +103,7 @@ import {sendMessageStream,getSessions,getSessionMessages,setFeedback} from '../s
 // 引入会话类型
 import type{ChatSession,SessionMessage,Reference} from '../services/chat'
 // 引入点赞/点踩图标
-import {CaretTop,CaretBottom,UploadFilled,Paperclip} from '@element-plus/icons-vue'
-// 引入文档上传接口（边问边传：AI 咨询页内直接上传入库）
-import {uploadDocument} from '../services/knowledge'
+import {CaretTop,CaretBottom} from '@element-plus/icons-vue'
 
 // 当前路由对象（取 :sessionId 参数）
 const route=useRoute()
@@ -165,37 +125,6 @@ const messages=ref<Message[]>([]);
 const inputMessage=ref('');
 // 是否等待 AI 回复
 const loading=ref(false)
-
-// ===== 文档上传弹窗（边问边传） =====
-// 弹窗显隐
-const uploadDialogVisible=ref(false)
-// 当前选中的文件（el-upload 封装对象的 .raw 才是真正的 File）
-const selectedFile=ref<File|null>(null)
-// 上传/解析中标记（防重复提交 + 按钮 loading）
-const uploading=ref(false)
-
-// 选中文件回调：只暂存，不自动上传
-const handleFileChange=(uploadFile:any)=>{
-  selectedFile.value=uploadFile.raw
-}
-
-// 上传并入库：后端自动完成 解析 → 分块 → 向量化 → 双写
-const doUpload=async()=>{
-  if(!selectedFile.value||uploading.value)return
-  uploading.value=true
-  try{
-    const result=await uploadDocument(selectedFile.value)
-    // 成功后提示分块数，引导用户直接就该文档提问
-    ElMessage.success(`《${result.filename}》已入库（${result.chunkCount} 个分块），现在可以直接提问它的内容`)
-    // 关弹窗并复位，方便下次上传
-    uploadDialogVisible.value=false
-    selectedFile.value=null
-  }catch(error:any){
-    ElMessage.error('上传失败：'+(error?.message??'未知错误'))
-  }finally{
-    uploading.value=false
-  }
-}
 // 消息列表容器的引用（滚动用）
 const messageListRef=ref<HTMLElement|null>(null)
 
@@ -728,29 +657,5 @@ const sendMessage=async ()=>{
 /* 发送按钮 */
 .send-btn {
   align-self: flex-end;
-}
-
-/* 上传按钮：贴附件样式，窄方形 */
-.attach-btn {
-  flex-shrink: 0;
-  width: 52px;
-  height: 52px;
-  font-size: 18px;
-}
-
-/* 上传弹窗内：已选文件信息 + 上传按钮一行 */
-.upload-actions {
-  margin-top: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.selected-file {
-  font-size: 13px;
-  color: #606266;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 </style>
