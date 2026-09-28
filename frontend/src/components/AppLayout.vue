@@ -271,7 +271,20 @@ const activeMenu = computed(() => {
   background: #fff;
   border-right: 1px solid #e4e7ed;
   transition: width 0.2s;
-  overflow: hidden;
+  /* 导航项超出屏幕高度时出纵向滚动条（如案例+法律条文子菜单同时展开） */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+/* 细滚动条样式（Webkit 内核），不抢视觉 */
+.aside::-webkit-scrollbar {
+  width: 6px;
+}
+.aside::-webkit-scrollbar-thumb {
+  background: #dcdfe6;
+  border-radius: 3px;
+}
+.aside::-webkit-scrollbar-thumb:hover {
+  background: #c0c4cc;
 }
 .side-menu {
   border-right: none;
