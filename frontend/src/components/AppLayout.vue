@@ -53,7 +53,7 @@
 
     <!-- ===== 主体：左侧导航 + 内容区 ===== -->
     <el-container class="body">
-      <el-aside :width="collapsed ? '64px' : '200px'" class="aside">
+      <el-aside :width="collapsed ? '64px' : '200px'" :class="['aside', { collapsed: collapsed }]">
         <el-menu
           :default-active="activeMenu"
           :collapse="collapsed"
@@ -285,6 +285,15 @@ const activeMenu = computed(() => {
 }
 .aside::-webkit-scrollbar-thumb:hover {
   background: #c0c4cc;
+}
+/* 折叠态：菜单项少不会超高，放开溢出——
+   否则子菜单弹出层（案例/法律条文）定位在菜单项右侧，会被 overflow 裁剪掉，悬停无反应 */
+.aside.collapsed {
+  overflow: visible;
+}
+/* 子菜单弹出层保证浮在内容区之上 */
+.aside .el-menu--popup-container {
+  z-index: 3000;
 }
 .side-menu {
   border-right: none;
