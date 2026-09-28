@@ -60,7 +60,7 @@
           router
           class="side-menu"
         >
-          <el-menu-item index="/">
+          <el-menu-item index="/" data-title="首页">
             <el-icon><HomeFilled /></el-icon>
             <span>首页</span>
           </el-menu-item>
@@ -90,11 +90,11 @@
             <el-menu-item index="/laws/property"><span>房产物业</span></el-menu-item>
             <el-menu-item index="/laws/criminal"><span>刑事辩护</span></el-menu-item>
           </el-sub-menu>
-          <el-menu-item index="/chat">
+          <el-menu-item index="/chat" data-title="AI咨询">
             <el-icon><ChatDotRound /></el-icon>
             <span>AI咨询</span>
           </el-menu-item>
-          <el-menu-item index="/profile">
+          <el-menu-item index="/profile" data-title="个人中心">
             <el-icon><User /></el-icon>
             <span>个人中心</span>
           </el-menu-item>
@@ -294,6 +294,27 @@ const activeMenu = computed(() => {
 /* 子菜单弹出层保证浮在内容区之上 */
 .aside .el-menu--popup-container {
   z-index: 3000;
+}
+/* ===== 折叠态：纯 CSS 悬停提示（不依赖 Element Plus 浮层机制） =====
+   单项菜单 hover 显示 data-title 的气泡，固定在图标右侧 */
+.side-menu.el-menu--collapse .el-menu-item {
+  position: relative;
+}
+.side-menu.el-menu--collapse .el-menu-item:hover::after {
+  content: attr(data-title);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 10px;
+  background: #303133;
+  color: #fff;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3001;
 }
 .side-menu {
   border-right: none;
