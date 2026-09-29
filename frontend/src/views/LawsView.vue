@@ -17,7 +17,7 @@
       </el-input>
     </div>
 
-    <!-- 内嵌模块分块：点模块切换法条列表 -->
+    <!-- 内嵌模块分块：点模块切换法条列表，小标显示该模块法条数 -->
     <div class="module-tabs">
       <div
         v-for="category in lawCategories"
@@ -26,12 +26,13 @@
         @click="activeKey = category.key"
       >
         {{ category.title }}
-        <span class="count">{{ category.articles.length }}</span>
+        <span class="count">{{ countByModule(category.key) }}</span>
       </div>
     </div>
 
-    <!-- 当前模块的法条列表（按关键词过滤） -->
-    <div class="law-list">
+    <!-- 当前模块的法条列表（按关键词过滤，加载中转圈） -->
+    <div v-loading="loading" class="law-list-wrap">
+      <div class="law-list">
       <el-empty v-if="filtered.length === 0" description="没有匹配的法条，换个关键词试试" />
       <el-card
         v-for="item in filtered"
@@ -45,33 +46,58 @@
         </div>
         <p class="law-content">{{ item.content }}</p>
       </el-card>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, ref} from 'vue';
+import {computed, onMounted, ref} from 'vue';
+import {ElMessage} from 'element-plus';
 import {Search} from '@element-plus/icons-vue';
 import {lawCategories} from '@/data/laws';
+// 法条数据：从后端 MySQL 获取（law_articles 表）
+import {getLaws} from '@/services/content';
+import type {LawArticle} from '@/services/content';
 
-// 搜索关键词：过滤当前模块（标题/出处/内容任一命中）
+// 搜索关键词：过滤当前模块（要点名/出处/内容任一命中）
 const keyword = ref('');
 // 当前选中的模块 key（本地状态切换，不走路由）
 const activeKey = ref(lawCategories[0].key);
 
-// 当前模块
-const activeCategory = computed(() =>
-  lawCategories.find((c) => c.key === activeKey.value) ?? lawCategories[0]
-);
+// 法条列表：全量从后端拉取，按模块分组在前端做
+const articleList = ref<LawArticle[]>([]);
+const loading = ref(false);
 
-// 按关键词过滤当前模块：空关键词全量
+// 页面加载时拉取法条列表
+onMounted(async () => {
+  loading.value = true;
+  try {
+    articleList.value = await getLaws();
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '加载法律条文失败');
+  } finally {
+    loading.value = false;
+  }
+});
+
+// 每个模块的法条数量（分块小标显示）
+const countByModule = computed(() => {
+  const map: Record<string, number> = {};
+  for (const item of articleList.value) {
+    map[item.category] = (map[item.category] ?? 0) + 1;
+  }
+  return (key: string) => map[key] ?? 0;
+});
+
+// 先按当前模块过滤，再按关键词过滤
 const filtered = computed(() => {
-  const list = activeCategory.value.articles;
   const kw = keyword.value.trim();
-  if (!kw) return list;
-  return list.filter((item) =>
-    item.title.includes(kw) || item.source.includes(kw) || item.content.includes(kw)
-  );
+  return articleList.value.filter((item) => {
+    if (item.category !== activeKey.value) return false;
+    if (!kw) return true;
+    return item.title.includes(kw) || item.source.includes(kw) || item.content.includes(kw);
+  });
 });
 
 // 搜索按钮/回车：过滤是响应式的，这里留个钩子（后续可接后端全文检索）
@@ -137,6 +163,9 @@ function noop() {
 }
 
 /* ===== 法条列表 ===== */
+.law-list-wrap {
+  min-height: 200px;
+}
 .law-list {
   display: flex;
   flex-direction: column;

@@ -37,22 +37,25 @@ import {computed, inject, ref} from 'vue';
 import type {Ref} from 'vue';
 import {useRoute} from 'vue-router';
 import {getCategoryByKey} from '@/data/cases';
+import type {LawCase} from '@/services/content';
 
 const route = useRoute();
-// 父组件（CasesView）提供的搜索关键词（Ref<string>）
+// 父组件（CasesView）提供的搜索关键词与案例列表（数据来自后端接口）
 const keyword = inject<Ref<string>>('caseKeyword', ref(''));
+const caseList = inject<Ref<LawCase[]>>('caseList', ref([]));
 
-// 当前分类（由路由段决定）
+// 当前分类是否存在（元数据校验，未知分类显示空状态）
 const category = computed(() => getCategoryByKey(String(route.params.category || '')));
 
-// 按关键词过滤：命中标题/案情/要旨任一即保留，空关键词全量
+// 先按路由分类过滤，再按关键词过滤：命中标题/案情/要旨任一即保留
 const filtered = computed(() => {
-  const list = category.value?.cases ?? [];
+  const cat = String(route.params.category || '');
   const kw = (keyword.value ?? '').trim();
-  if (!kw) return list;
-  return list.filter((item) =>
-    item.title.includes(kw) || item.summary.includes(kw) || item.verdict.includes(kw)
-  );
+  return caseList.value.filter((item) => {
+    if (item.category !== cat) return false;
+    if (!kw) return true;
+    return item.title.includes(kw) || item.summary.includes(kw) || item.verdict.includes(kw);
+  });
 });
 </script>
 

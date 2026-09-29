@@ -23,8 +23,10 @@
       </el-button>
     </div>
 
-    <!-- 嵌套子路由：当前分类的案例列表 -->
-    <router-view />
+    <!-- 嵌套子路由：当前分类的案例列表（加载中显示转圈） -->
+    <div v-loading="listLoading" class="cases-body">
+      <router-view />
+    </div>
 
     <!-- 文档上传弹窗：上传后自动解析入库，可在 AI 咨询中提问其内容 -->
     <el-dialog v-model="uploadDialogVisible" title="上传法律文档" width="480px">
@@ -63,17 +65,38 @@
 </template>
 
 <script setup lang="ts">
-import {computed, provide, ref} from 'vue';
+import {computed, onMounted, provide, ref} from 'vue';
 import {useRoute} from 'vue-router';
 import {ElMessage} from 'element-plus';
 import {Search, Paperclip, UploadFilled} from '@element-plus/icons-vue';
 import {getCategoryByKey} from '@/data/cases';
+// 案例数据：从后端 MySQL 获取（law_cases 表）
+import {getCases} from '@/services/content';
+import type {LawCase} from '@/services/content';
 // 文档上传接口：后端自动完成 解析 → 分块 → 向量化 → 双写
 import {uploadDocument} from '@/services/knowledge';
 
 // 搜索关键词：提供给子路由组件过滤当前分类（响应式）
 const keyword = ref('');
 provide('caseKeyword', keyword);
+
+// 案例列表：全量从后端拉取，子路由按分类过滤
+const caseList = ref<LawCase[]>([]);
+const listLoading = ref(false);
+// 提供给嵌套子路由（CaseCategoryView）消费
+provide('caseList', caseList);
+
+// 页面加载时拉取案例列表
+onMounted(async () => {
+  listLoading.value = true;
+  try {
+    caseList.value = await getCases();
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '加载案例失败');
+  } finally {
+    listLoading.value = false;
+  }
+});
 
 const route = useRoute();
 // 当前分类名（标题区展示；子路由切换分类时跟随）
@@ -137,6 +160,10 @@ async function doUpload() {
   font-size: 16px;
   font-weight: 600;
   color: #303133;
+}
+/* 嵌套子路由容器：加载中转圈的高度兜底 */
+.cases-body {
+  min-height: 200px;
 }
 /* 上传文档按钮：靠右贴边 */
 .upload-btn {
