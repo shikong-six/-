@@ -46,6 +46,31 @@ const seedCases: LawCase[] = [
   {id: 16, category: 'criminal', title: '危险驾驶罪适用缓刑的情形', summary: '被告人血液酒精含量 120mg/100ml，未造成事故，认罪认罚，主张适用缓刑。', verdict: '法院综合考虑酒精含量较低、无从重情节、认罪认罚，判处拘役二个月，缓刑三个月。', lawRefs: ['《刑法》第133条之一', '《刑事诉讼法》第15条']},
   {id: 17, category: 'criminal', title: '故意伤害与正当防卫的界限', summary: '双方因琐事发生冲突，一方持械先动手，另一方还手致对方轻伤。', verdict: '法院认定还手一方系制止不法侵害，属正当防卫，不负刑事责任。', lawRefs: ['《刑法》第20条']},
   {id: 18, category: 'criminal', title: '帮助信息网络犯罪活动罪的从轻情节', summary: '在校大学生出借银行卡给他人用于转账，涉案流水较大，但获利极少且系初犯。', verdict: '法院认定构成帮信罪，综合从犯地位、坦白、退赃等情节，判处缓刑并处罚金。', lawRefs: ['《刑法》第287条之二']},
+  // ===== 第二批（每类扩充 3 条，共 36 条）=====
+  // 婚姻家庭
+  {id: 19, category: 'marriage', title: '同居期间购房登记一人名下的分割', summary: '情侣同居期间共同出资购房，登记在一方名下，分手后方出资人主张分割。', verdict: '法院结合出资比例、共同生活事实，认定房屋按份共有，登记方按比例补偿对方。', lawRefs: ['《民法典》第308条']},
+  {id: 20, category: 'marriage', title: '婚内赠与第三者财产，配偶全额追回', summary: '男方婚内多次向第三者转账共计 40 万元，女方起诉要求确认赠与无效并返还。', verdict: '法院认定该赠与违背公序良俗且处分了夫妻共同财产，判决赠与无效，第三者全额返还。', lawRefs: ['《民法典》第153条', '《民法典》第1062条']},
+  {id: 21, category: 'marriage', title: '成年子女拒不尽赡养义务被诉', summary: '八旬老人育有两子，均拒绝支付赡养费也拒绝照看，老人起诉。', verdict: '法院判决两子按月支付赡养费并定期探视；赡养义务不因父母财产分配不均而免除。', lawRefs: ['《民法典》第1067条']},
+  // 交通事故
+  {id: 22, category: 'traffic', title: '行人闯红灯被撞，机动车方责任减轻', summary: '行人闯红灯横穿马路被正常行驶车辆撞伤，交警认定行人负主要责任。', verdict: '法院认定行人存在重大过错，减轻机动车一方赔偿责任，行人自担七成损失。', lawRefs: ['《道路交通安全法》第76条']},
+  {id: 23, category: 'traffic', title: '乘坐网约车发生事故，平台先行赔付', summary: '乘客乘坐网约车途中被货车追尾受伤，网约车无责，乘客主张平台赔偿。', verdict: '法院认定平台与乘客构成运输合同关系，承运人应对运输中旅客伤亡承担赔偿责任，平台先行赔付后向货车方追偿。', lawRefs: ['《民法典》第823条']},
+  {id: 24, category: 'traffic', title: '车辆借给他人肇事，车主有过错才担责', summary: '车主将车借给无驾照的朋友使用，朋友肇事致人重伤。', verdict: '法院认定车主未尽审查义务存在过错，按过错比例承担相应赔偿责任；主要责任由使用人承担。', lawRefs: ['《民法典》第1209条']},
+  // 合同纠纷
+  {id: 25, category: 'contract', title: '"定金"与"订金"一字之差，结果相反', summary: '购房者交 5 万元"定金"后反悔不买了，开发商主张没收；另案买家交的是"订金"。', verdict: '前案定金适用罚则，买方违约无权要求返还；后案订金视为预付款，买方解约可要求退还。', lawRefs: ['《民法典》第586条', '《民法典》第587条']},
+  {id: 26, category: 'contract', title: '口头约定的合同成立，但举证是关键', summary: '双方电话约定供货 10 万元，无书面合同，供货后买方拒付货款。', verdict: '法院结合通话录音、送货单、微信记录认定合同成立且已履行，判决买方付款。', lawRefs: ['《民法典》第469条', '《民法典》第490条']},
+  {id: 27, category: 'contract', title: '疫情封控致商铺无法经营，租金减免获支持', summary: '餐饮商户因疫情封控三个月无法营业，请求解除租赁合同并减免租金。', verdict: '法院认定构成情势变更，判决解除租赁合同并酌情减免封控期间租金。', lawRefs: ['《民法典》第533条']},
+  // 劳动纠纷
+  {id: 28, category: 'labor', title: '试用期约定违法，用人单位赔偿', summary: '公司与员工约定试用期 8 个月，且工资只有转正的 70%，员工离职后主张赔偿。', verdict: '法院认定试用期超过法定期限且工资低于法定标准，判决公司按转正工资补足差额并支付赔偿金。', lawRefs: ['《劳动合同法》第19条', '《劳动合同法》第83条']},
+  {id: 29, category: 'labor', title: '未休年假应按 300% 折算工资', summary: '员工离职时主张两年共 10 天未休年假工资，公司称已安排休假但无记录。', verdict: '公司未能举证已安排休假，法院判决按日工资的 300%（含正常工资）折算支付未休年假报酬。', lawRefs: ['《职工带薪年休假条例》第5条']},
+  {id: 30, category: 'labor', title: '恶意调岗降薪，员工被迫离职可获补偿', summary: '公司未经协商将部门经理调为前台，薪资腰斩，员工以"未按约提供劳动条件"为由被迫离职并主张经济补偿。', verdict: '法院认定调岗降薪不合理，员工被迫解除成立，公司应支付经济补偿。', lawRefs: ['《劳动合同法》第35条', '《劳动合同法》第38条', '《劳动合同法》第46条']},
+  // 房产物业
+  {id: 31, category: 'property', title: '二房东擅自转租，租客被真房东赶走', summary: '租客与二房东签约并付了一年租金，真房东以未经同意转租为由要求腾房。', verdict: '法院认定未经出租人同意的转租合同对出租人不发生效力，租客腾退后可向二房东追偿损失。', lawRefs: ['《民法典》第716条']},
+  {id: 32, category: 'property', title: '新房墙体开裂渗水，开发商保修并赔偿', summary: '业主收房半年后发现外墙渗水、墙体开裂，开发商以"已过验房期"推诿。', verdict: '法院认定属质量保修范围，判决开发商履行维修义务并赔偿业主实际损失。', lawRefs: ['《商品房销售管理办法》第33条', '《民法典》第617条']},
+  {id: 33, category: 'property', title: '楼上漏水殃及楼下，侵权赔偿', summary: '楼上住户水管爆裂致楼下装修浸泡，双方就赔偿金额争执不下。', verdict: '法院认定楼上未尽管理义务构成侵权，判决赔偿楼下修复费用及合理住宿费用。', lawRefs: ['《民法典》第1165条']},
+  // 刑事辩护
+  {id: 34, category: 'criminal', title: '盗窃金额刚过起刑点，退赃获不起诉', summary: '嫌疑人初犯盗窃财物价值 1500 元，案发后全额退赃并取得谅解。', verdict: '检察机关综合考虑数额较小、初犯、退赃谅解等情节，作出相对不起诉决定。', lawRefs: ['《刑法》第264条', '《刑事诉讼法》第177条']},
+  {id: 35, category: 'criminal', title: '主动投案如实供述，自首成立从轻处罚', summary: '嫌疑人作案后主动到派出所投案，如实供述全部犯罪事实。', verdict: '法院认定自首成立，依法从轻处罚，在法定刑以下判处并适用缓刑。', lawRefs: ['《刑法》第67条']},
+  {id: 36, category: 'criminal', title: '未成年人犯罪记录依法封存', summary: '17 岁少年因抢劫被判缓刑，家属担心犯罪记录影响升学就业。', verdict: '法院依法对犯罪记录予以封存，除司法机关办案需要或有关单位根据国家规定查询外，不得向任何单位个人提供。', lawRefs: ['《刑事诉讼法》第286条']},
 ];
 
 // ===== 种子数据：法律条文（6 个模块 21 条，常用法条精简摘录，非官方文本）=====
@@ -106,16 +131,17 @@ async function initContentTables(): Promise<void> {
       INDEX idx_category (category)
     ) COMMENT='法律条文库'
   `);
-  // 空库才灌种子数据，避免重复插入
-  const [caseRows] = await pool.query<any[]>('SELECT COUNT(*) AS total FROM law_cases');
-  if (caseRows[0].total === 0) {
-    for (const item of seedCases) {
-      await pool.query(
-        'INSERT INTO law_cases (id, category, title, summary, verdict, law_refs) VALUES (?,?,?,?,?,?)',
-        [item.id, item.category, item.title, item.summary, item.verdict, JSON.stringify(item.lawRefs)]
-      );
-    }
-    console.log(`法律案例种子数据已写入：${seedCases.length} 条`);
+  // 幂等灌入：INSERT IGNORE 按主键去重，老库可增量补新数据、重复执行不报错
+  let caseSeeded = 0;
+  for (const item of seedCases) {
+    const [result] = await pool.query<any>(
+      'INSERT IGNORE INTO law_cases (id, category, title, summary, verdict, law_refs) VALUES (?,?,?,?,?,?)',
+      [item.id, item.category, item.title, item.summary, item.verdict, JSON.stringify(item.lawRefs)]
+    );
+    caseSeeded += result.affectedRows;
+  }
+  if (caseSeeded > 0) {
+    console.log(`法律案例种子数据新增：${caseSeeded} 条（总计 ${seedCases.length} 条）`);
   }
   const [articleRows] = await pool.query<any[]>('SELECT COUNT(*) AS total FROM law_articles');
   if (articleRows[0].total === 0) {
