@@ -43,6 +43,9 @@ app.use('/api/auth', authRouter)
 // 注册统计路由（首页统计卡片用，需登录）
 import statsRouter from './routes/stats'
 app.use('/api/stats', authMiddleware, statsRouter)
+// 注册内容库路由（法律案例/法条，需登录）
+import contentRouter from './routes/content'
+app.use('/api/content', authMiddleware, contentRouter)
 // 404 处理：如果请求的路径没有匹配任何路由，返回 404
 app.use((req,res)=>{
   res.status(404).json({
