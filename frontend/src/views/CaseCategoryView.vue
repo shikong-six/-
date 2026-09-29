@@ -4,36 +4,49 @@
     <!-- 未知分类 -->
     <el-empty v-if="!category" description="分类不存在" />
 
-    <!-- 当前分类下的案例卡片（按关键词过滤） -->
+    <!-- 当前分类下的案例卡片（按关键词过滤后分页展示） -->
     <template v-else>
       <el-empty v-if="filtered.length === 0" description="没有匹配的案例，换个关键词试试" />
-      <el-card
-        v-for="item in filtered"
-        :key="item.id"
-        shadow="never"
-        class="case-card"
-      >
-        <div class="case-title">{{ item.title }}</div>
-        <div class="case-section">
-          <span class="label">案情摘要</span>
-          <p>{{ item.summary }}</p>
-        </div>
-        <div class="case-section">
-          <span class="label">裁判要旨</span>
-          <p>{{ item.verdict }}</p>
-        </div>
-        <div class="case-laws">
-          <el-tag v-for="(law, i) in item.lawRefs" :key="i" size="small" type="info" class="law-tag">
-            {{ law }}
-          </el-tag>
-        </div>
-      </el-card>
+      <template v-else>
+        <el-card
+          v-for="item in paged"
+          :key="item.id"
+          shadow="never"
+          class="case-card"
+        >
+          <div class="case-title">{{ item.title }}</div>
+          <div class="case-section">
+            <span class="label">案情摘要</span>
+            <p>{{ item.summary }}</p>
+          </div>
+          <div class="case-section">
+            <span class="label">裁判要旨</span>
+            <p>{{ item.verdict }}</p>
+          </div>
+          <div class="case-laws">
+            <el-tag v-for="(law, i) in item.lawRefs" :key="i" size="small" type="info" class="law-tag">
+              {{ law }}
+            </el-tag>
+          </div>
+        </el-card>
+
+        <!-- 分页：超过一页时显示底部页码导航 -->
+        <el-pagination
+          v-if="filtered.length > pageSize"
+          v-model:current-page="page"
+          class="case-pagination"
+          background
+          layout="prev, pager, next, total"
+          :page-size="pageSize"
+          :total="filtered.length"
+        />
+      </template>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, inject, ref} from 'vue';
+import {computed, inject, ref, watch} from 'vue';
 import type {Ref} from 'vue';
 import {useRoute} from 'vue-router';
 import {getCategoryByKey} from '@/data/cases';
@@ -56,6 +69,19 @@ const filtered = computed(() => {
     if (!kw) return true;
     return item.title.includes(kw) || item.summary.includes(kw) || item.verdict.includes(kw);
   });
+});
+
+// ===== 分页 =====
+const page = ref(1);        // 当前页码（el-pagination 双向绑定）
+const pageSize = 5;         // 每页 5 条
+// 切换分类或修改搜索词时回到第 1 页（否则可能停在已经不存在的页码上）
+watch([() => route.params.category, keyword], () => {
+  page.value = 1;
+});
+// 当前页的数据切片
+const paged = computed(() => {
+  const start = (page.value - 1) * pageSize;
+  return filtered.value.slice(start, start + pageSize);
 });
 </script>
 
@@ -96,5 +122,10 @@ const filtered = computed(() => {
 }
 .law-tag {
   border-radius: 4px;
+}
+/* 底部分页：居中 */
+.case-pagination {
+  margin-top: 8px;
+  justify-content: center;
 }
 </style>
