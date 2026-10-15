@@ -21,6 +21,8 @@ export function useChatStream() {
   const streaming = ref(false);
   // 中止控制器：手动停止或组件卸载时掐断连接，后端会感知断开并中止 Kimi 生成
   let abortController: AbortController | null = null;
+  // 只让最后一次请求收尾，避免上一条流的 finally 把新请求的状态清掉
+  let runId = 0;
 
   // 发起流式问答
   // messages：当前对话的消息历史（最后一条必须是用户问题）
@@ -30,14 +32,16 @@ export function useChatStream() {
     sessionId: number | null,
     handlers: StreamHandlers
   ): Promise<void> {
+    const myId = ++runId;
     streaming.value = true;
-    abortController = new AbortController();
+    const controller = new AbortController();
+    abortController = controller;
 
     // 手动中止时走统一的结束逻辑
     const onAbort = () => {
       handlers.onError('已停止生成');
     };
-    abortController.signal.addEventListener('abort', onAbort, {once: true});
+    controller.signal.addEventListener('abort', onAbort, {once: true});
 
     try {
       // 从 user store 取 token（fetch 不走 Axios 拦截器，手动带）
@@ -49,7 +53,7 @@ export function useChatStream() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({messages, sessionId: sessionId ?? null}),
-        signal: abortController.signal,
+        signal: controller.signal,
       });
 
       // 401 处理（对齐 request.ts 拦截器：清凭证跳登录）
@@ -61,7 +65,18 @@ export function useChatStream() {
         throw new Error('登录已过期，请重新登录');
       }
       if (!response.ok || !response.body) {
-        throw new Error('请求失败：' + response.status);
+        // 代理连不上后端时，Vite 会回 500。状态码不要原样丢给页面。
+        if (response.status >= 500) throw new Error('咨询服务暂时不可用');
+        // ★ 400 是后端主动拒绝（问题太短 / 纯英文 / 重复字符），它会在响应体里写清原因。
+        //   原来只显示状态码，用户看到「请求失败：400」完全不知道哪里不对。
+        let reason = '';
+        try {
+          const body: {message?: string} = await response.json();
+          if (typeof body?.message === 'string') reason = body.message;
+        } catch {
+          reason = '';
+        }
+        throw new Error(reason || `请求失败：${response.status}`);
       }
 
       // 逐块读流
@@ -80,16 +95,21 @@ export function useChatStream() {
         for (const event of events) {
           const line = event.trim();
           if (!line.startsWith('data:')) continue;
-          const data = JSON.parse(line.slice(5).trim());
+          let data: {type?: string; message?: string; content?: string; references?: Reference[]; sessionId?: number; historyId?: number | null};
+          try {
+            data = JSON.parse(line.slice(5).trim());
+          } catch {
+            continue;
+          }
           if (data.type === 'status') {
             // 检索完成：更新等待提示（首 token 前的阶段反馈）
-            handlers.onStatus(data.message);
+            handlers.onStatus(data.message || '');
           } else if (data.type === 'token') {
-            handlers.onToken(data.content);
+            handlers.onToken(data.content || '');
           } else if (data.type === 'references') {
-            handlers.onReferences(data.references);
-          } else if (data.type === 'session') {
-            handlers.onSession(data.sessionId, data.historyId);
+            handlers.onReferences(data.references || []);
+          } else if (data.type === 'session' && typeof data.sessionId === 'number') {
+            handlers.onSession(data.sessionId, data.historyId ?? null);
           } else if (data.type === 'done') {
             handlers.onDone();
           } else if (data.type === 'error') {
@@ -99,13 +119,17 @@ export function useChatStream() {
       }
     } catch (e) {
       // 手动中止的错误上面已经回调过了，不重复抛
-      if (!abortController.signal.aborted) {
-        handlers.onError(e instanceof Error ? e.message : '生成失败');
+      if (!controller.signal.aborted) {
+        const raw = e instanceof Error ? e.message : '生成失败';
+        const offline = /failed to fetch|networkerror|load failed/i.test(raw);
+        handlers.onError(offline ? '咨询服务暂时不可用' : raw);
       }
     } finally {
-      abortController.signal.removeEventListener('abort', onAbort);
-      abortController = null;
-      streaming.value = false;
+      controller.signal.removeEventListener('abort', onAbort);
+      if (myId === runId) {
+        abortController = null;
+        streaming.value = false;
+      }
     }
   }
 

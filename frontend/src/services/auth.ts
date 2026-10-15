@@ -14,21 +14,20 @@ interface AuthResponse {
 }
 
 // 注册（注册成功后端直接返回 token，即注册即登录）
-export async function register(username: string, password: string): Promise<void> {
+export async function register(username: string, password: string, remember = true): Promise<void> {
   const response = await request.post<AuthResponse>('/auth/register', {username, password});
   if (response.data.success) {
-    // 凭证写入 user store（store 内部同时落 localStorage 持久化）
-    useUserStore().saveAuth(response.data.data.token, response.data.data.username);
+    useUserStore().saveAuth(response.data.data.token, response.data.data.username, remember);
     return;
   }
   throw new Error(response.data.message || '注册失败');
 }
 
-// 登录
-export async function login(username: string, password: string): Promise<void> {
+// 登录；remember=false 时凭证只存 sessionStorage
+export async function login(username: string, password: string, remember = true): Promise<void> {
   const response = await request.post<AuthResponse>('/auth/login', {username, password});
   if (response.data.success) {
-    useUserStore().saveAuth(response.data.data.token, response.data.data.username);
+    useUserStore().saveAuth(response.data.data.token, response.data.data.username, remember);
     return;
   }
   throw new Error(response.data.message || '登录失败');

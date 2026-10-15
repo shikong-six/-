@@ -1,113 +1,83 @@
-<!-- 后台管理布局：顶部栏（左 logo + 右操作区）+ 可折叠左侧导航 + 主内容区 -->
+<!-- 门户布局：深色顶部导航栏（左 logo + 横向菜单 + 右操作区）+ 全宽主内容区 -->
 <template>
-  <el-container class="layout">
-    <!-- ===== 顶部栏 ===== -->
-    <el-header class="topbar" height="56px">
-      <!-- 左侧：Logo 位 -->
-      <div class="logo-area">
-        <span class="logo-icon">⚖️</span>
-        <span class="logo-text">法制通</span>
-      </div>
+  <div class="portal-layout">
+    <!-- ===== 顶部导航栏 ===== -->
+    <header class="topbar">
+      <div class="topbar-inner">
+        <!-- 左侧：Logo -->
+        <div class="logo-area" @click="$router.push('/')">
+          <span class="logo-icon">⚖️</span>
+          <div class="logo-text">
+            <span class="logo-name">法制通</span>
+            <span class="logo-sub">LEGAL KNOWLEDGE PLATFORM</span>
+          </div>
+        </div>
 
-      <!-- 右侧：操作区 -->
-      <div class="topbar-actions">
-        <!-- 折叠/展开左侧导航 -->
-        <el-tooltip :content="collapsed ? '展开导航' : '收起导航'" placement="bottom">
-          <el-icon class="action-icon" @click="collapsed = !collapsed">
-            <Expand v-if="collapsed" />
-            <Fold v-else />
-          </el-icon>
-        </el-tooltip>
+        <!-- 中部：横向菜单，各项样式一致 -->
+        <nav class="nav-menu">
+          <div
+            v-for="item in navItems"
+            :key="item.path"
+            :class="['nav-pill', {active: isActive(item.path)}]"
+            @click="goNav(item)"
+          >
+            {{ item.title }}
+          </div>
+        </nav>
 
-        <!-- 全屏切换 -->
-        <el-tooltip :content="isFullscreen ? '退出全屏' : '全屏'" placement="bottom">
-          <el-icon class="action-icon" @click="toggleFullscreen">
-            <FullScreen />
-          </el-icon>
-        </el-tooltip>
+        <!-- 右侧：操作区 -->
+        <div class="topbar-actions">
+          <!-- 全屏切换 -->
+          <el-tooltip :content="isFullscreen ? '退出全屏' : '全屏'" placement="bottom">
+            <el-icon class="action-icon" @click="toggleFullscreen">
+              <FullScreen />
+            </el-icon>
+          </el-tooltip>
 
-        <!-- 设置 -->
-        <el-tooltip content="设置" placement="bottom">
-          <el-icon class="action-icon" @click="onSettings">
-            <Setting />
-          </el-icon>
-        </el-tooltip>
+          <!-- 设置 -->
+          <el-tooltip content="设置" placement="bottom">
+            <el-icon class="action-icon" @click="onSettings">
+              <Setting />
+            </el-icon>
+          </el-tooltip>
 
-        <!-- 用户菜单 -->
-        <el-dropdown trigger="click" @command="onUserCommand">
-          <span class="user-chip">
-            <span class="avatar">{{ initial }}</span>
-            <span class="username">{{ userStore.username }}</span>
-            <el-icon class="caret"><ArrowDown /></el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="profile">个人中心</el-dropdown-item>
-              <el-dropdown-item command="history">问答历史</el-dropdown-item>
-              <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
-    </el-header>
-
-    <!-- ===== 主体：左侧导航 + 内容区 ===== -->
-    <el-container class="body">
-      <el-aside :width="collapsed ? '64px' : '200px'" :class="['aside', { collapsed: collapsed }]">
-        <el-menu
-          :default-active="activeMenu"
-          :collapse="collapsed"
-          router
-          class="side-menu"
-        >
-          <el-menu-item index="/" data-title="首页">
-            <el-icon><HomeFilled /></el-icon>
-            <span>首页</span>
-          </el-menu-item>
-          <!-- 案例：展开六大分类（嵌套路由 /cases/:category） -->
-          <el-sub-menu index="/cases">
-            <template #title>
-              <el-icon><Document /></el-icon>
-              <span>案例</span>
+          <!-- 用户菜单 -->
+          <el-dropdown trigger="click" @command="onUserCommand">
+            <span class="user-chip">
+              <span class="avatar">{{ initial }}</span>
+              <span class="username">{{ userStore.username }}</span>
+              <el-icon class="caret"><ArrowDown /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                <el-dropdown-item command="settings">设置</el-dropdown-item>
+                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
             </template>
-            <el-menu-item index="/cases/marriage"><span>婚姻家庭</span></el-menu-item>
-            <el-menu-item index="/cases/traffic"><span>交通事故</span></el-menu-item>
-            <el-menu-item index="/cases/contract"><span>合同纠纷</span></el-menu-item>
-            <el-menu-item index="/cases/labor"><span>劳动纠纷</span></el-menu-item>
-            <el-menu-item index="/cases/property"><span>房产物业</span></el-menu-item>
-            <el-menu-item index="/cases/criminal"><span>刑事辩护</span></el-menu-item>
-          </el-sub-menu>
-          <!-- 法律条文：单一项，模块在页面内嵌分块切换 -->
-          <el-menu-item index="/laws">
-            <el-icon><Collection /></el-icon>
-            <span>法律条文</span>
-          </el-menu-item>
-          <el-menu-item index="/chat" data-title="AI咨询">
-            <el-icon><ChatDotRound /></el-icon>
-            <span>AI咨询</span>
-          </el-menu-item>
-          <el-menu-item index="/profile" data-title="个人中心">
-            <el-icon><User /></el-icon>
-            <span>个人中心</span>
-          </el-menu-item>
-        </el-menu>
-      </el-aside>
+          </el-dropdown>
+        </div>
+      </div>
+    </header>
 
-      <el-main class="main">
-        <router-view />
-      </el-main>
-    </el-container>
-  </el-container>
+    <!-- ===== 主内容区：页面切换淡入上移；AI 咨询 keep-alive 保住对话现场 ===== -->
+    <main class="main">
+      <router-view v-slot="{ Component, route: viewRoute }">
+        <transition name="page-fade" mode="out-in">
+          <keep-alive include="ChatView">
+            <component :is="Component" :key="pageKey(viewRoute)" />
+          </keep-alive>
+        </transition>
+      </router-view>
+    </main>
+  </div>
 </template>
 
 <script setup lang="ts">
 import {computed, onBeforeUnmount, onMounted, ref} from 'vue';
 import {useRoute, useRouter} from 'vue-router';
 import {ElMessage} from 'element-plus';
-import {
-  HomeFilled, Document, Collection, ChatDotRound, User,
-  Fold, Expand, FullScreen, Setting, ArrowDown
-} from '@element-plus/icons-vue';
+import {FullScreen, Setting, ArrowDown} from '@element-plus/icons-vue';
 import {useUserStore} from '@/store/user';
 import {logout} from '@/services/auth';
 
@@ -118,8 +88,39 @@ const userStore = useUserStore();
 // 头像显示用户名首字符
 const initial = computed(() => (userStore.username ? userStore.username[0].toUpperCase() : '用'));
 
-// ===== 左侧导航折叠 =====
-const collapsed = ref(false);
+// 过渡用 key：AI 咨询 /chat 与 /chat/:id 共用同一实例，避免切会话打断流式
+function pageKey(viewRoute: {name?: string | symbol | symbol; path: string}) {
+  if (viewRoute.name === 'Chat' || viewRoute.name === 'ChatSession') return 'chat';
+  if (viewRoute.name === 'Cases' || viewRoute.name === 'CaseDetail') return viewRoute.path;
+  return viewRoute.path;
+}
+
+// ===== 顶部横向菜单项（原侧边导航项平移到顶部）=====
+const navItems = [
+  {path: '/', title: '首页'},
+  {path: '/cases', title: '案例'},
+  {path: '/laws', title: '法律条文'},
+  {path: '/chat', title: 'AI咨询'},
+  {path: '/profile', title: '个人中心'},
+];
+
+// 当前要高亮的菜单项：/chat/123 高亮 AI咨询，其余按路径前缀处理
+function isActive(path: string) {
+  if (path === '/') return route.path === '/';
+  return route.path === path || route.path.startsWith(path + '/');
+}
+
+// 菜单跳转：AI咨询恢复最近的对话现场（新提问/历史会话），其余直达
+function goNav(item: {path: string; title: string}) {
+  // AI咨询：ChatView 实时把最近对话路径记在 sessionStorage，没有则进新对话
+  const target = item.path === '/chat'
+    ? (sessionStorage.getItem('fazhitong_last_chat') || '/chat')
+    : item.path;
+  // 已在目标页就不重复跳转（避免路由冗余警告）
+  if (route.path !== target) {
+    router.push(target);
+  }
+}
 
 // ===== 全屏切换 =====
 const isFullscreen = ref(false);
@@ -146,73 +147,120 @@ function onSettings() {
 function onUserCommand(command: string) {
   if (command === 'profile') {
     router.push('/profile');
-  } else if (command === 'history') {
-    router.push('/history');
+  } else if (command === 'settings') {
+    onSettings();
   } else if (command === 'logout') {
+    sessionStorage.removeItem('fazhitong_last_chat');
     logout();
-    // 守卫会把未登录用户送回登录页
     router.replace('/login');
   }
 }
-
-// 当前要高亮的菜单项：/chat/123 高亮 AI咨询（/chat），其余按路径前缀处理
-const activeMenu = computed(() => {
-  if (route.path.startsWith('/chat')) return '/chat';
-  if (route.path.startsWith('/knowledge')) return '/knowledge/list';
-  return route.path;
-});
 </script>
 
 <style scoped>
-/* 整体占满视口，上下两栏（顶部栏 + 主体） */
-.layout {
-  height: 100vh;
+/* 整体：上下两栏（顶部导航 + 内容），浅灰背景 */
+.portal-layout {
+  min-height: 100vh;
+  background: #f3f5f7;
 }
 
-/* ===== 顶部栏 ===== */
+/* ===== 顶部导航栏 ===== */
 .topbar {
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
+  background: linear-gradient(90deg, #0f2d40 0%, #16324a 100%);
+  box-shadow: 0 2px 8px rgba(15, 45, 64, 0.25);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  height: 60px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 16px 0 20px;
+  gap: 28px;
+  padding: 0 20px;
 }
 
-/* Logo 区：留位，可换图片 */
+/* Logo 区 */
 .logo-area {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
 }
 .logo-icon {
-  font-size: 22px;
+  font-size: 26px;
 }
 .logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.logo-name {
+  color: #fff;
   font-size: 18px;
   font-weight: 700;
-  color: #303133;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+}
+.logo-sub {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  transform: scale(0.92);
+  transform-origin: left;
+}
+
+/* 横向菜单：药丸式 */
+.nav-menu {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nav-pill {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  text-decoration: none;
+  padding: 7px 16px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.nav-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+/* 选中态与未选中相同，不单独铺底 */
+.nav-pill.active {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 400;
 }
 
 /* 右侧操作区 */
 .topbar-actions {
+  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 .action-icon {
   font-size: 18px;
-  color: #606266;
+  color: rgba(255, 255, 255, 0.75);
   cursor: pointer;
   padding: 8px;
   border-radius: 6px;
   transition: background 0.15s, color 0.15s;
 }
 .action-icon:hover {
-  background: #f0f2f5;
-  color: #409eff;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 /* 用户芯片 */
@@ -227,13 +275,13 @@ const activeMenu = computed(() => {
   outline: none;
 }
 .user-chip:hover {
-  background: #f0f2f5;
+  background: rgba(255, 255, 255, 0.12);
 }
 .avatar {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4a6cf7, #7a9bff);
+  background: linear-gradient(135deg, #14b8a6, #0f9d8f);
   color: #fff;
   font-size: 14px;
   display: flex;
@@ -242,7 +290,7 @@ const activeMenu = computed(() => {
 }
 .username {
   font-size: 14px;
-  color: #303133;
+  color: rgba(255, 255, 255, 0.9);
   max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -250,76 +298,25 @@ const activeMenu = computed(() => {
 }
 .caret {
   font-size: 12px;
-  color: #909399;
+  color: rgba(255, 255, 255, 0.55);
 }
 
-/* ===== 主体区 ===== */
-.body {
-  height: calc(100vh - 56px);
-}
-
-/* 左侧导航：宽度随折叠状态变化（ aside 动画过渡） */
-.aside {
-  background: #fff;
-  border-right: 1px solid #e4e7ed;
-  transition: width 0.2s;
-  /* 导航项超出屏幕高度时出纵向滚动条（如案例+法律条文子菜单同时展开） */
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-/* 细滚动条样式（Webkit 内核），不抢视觉 */
-.aside::-webkit-scrollbar {
-  width: 6px;
-}
-.aside::-webkit-scrollbar-thumb {
-  background: #dcdfe6;
-  border-radius: 3px;
-}
-.aside::-webkit-scrollbar-thumb:hover {
-  background: #c0c4cc;
-}
-/* 折叠态：菜单项少不会超高，放开溢出——
-   否则子菜单弹出层（案例/法律条文）定位在菜单项右侧，会被 overflow 裁剪掉，悬停无反应 */
-.aside.collapsed {
-  overflow: visible;
-}
-/* 子菜单弹出层保证浮在内容区之上 */
-.aside .el-menu--popup-container {
-  z-index: 3000;
-}
-/* ===== 折叠态：纯 CSS 悬停提示（不依赖 Element Plus 浮层机制） =====
-   单项菜单 hover 显示 data-title 的气泡，固定在图标右侧 */
-.side-menu.el-menu--collapse .el-menu-item {
-  position: relative;
-}
-.side-menu.el-menu--collapse .el-menu-item:hover::after {
-  content: attr(data-title);
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 10px;
-  background: #303133;
-  color: #fff;
-  font-size: 13px;
-  padding: 6px 12px;
-  border-radius: 4px;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 3001;
-}
-.side-menu {
-  border-right: none;
-}
-/* 未折叠时不折行隐藏文字 */
-.side-menu:not(.el-menu--collapse) {
-  width: 200px;
-}
-
-/* 主内容区 */
+/* ===== 主内容区 ===== */
 .main {
-  background: #f5f7fa;
   padding: 20px;
-  overflow-y: auto;
+}
+
+/* 页面切换过渡：旧页淡出 → 新页淡入上移 */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 </style>

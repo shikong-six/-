@@ -1,13 +1,12 @@
-// 场景化首页数据：四大法律咨询场景 + 每个场景预置的具体问题
-// 前端预置（与 Web 端热门问题同一思路），点击问题自动发问，不需要后端接口
+// 场景化首页：四大咨询场景 + 预置问题（前端预置，一键发问）
 
 export interface Scenario {
   key: string;
-  title: string;        // 场景名
-  icon: string;         // Vant 内置图标名
-  color: string;        // 卡片主色
-  description: string;  // 一句话说明
-  questions: string[];  // 预置问题清单
+  title: string;
+  icon: string;
+  accent: string;      // 小色条 / 图标色（不再整卡铺满大色块）
+  description: string;
+  questions: string[];
 }
 
 export const scenarios: Scenario[] = [
@@ -15,7 +14,7 @@ export const scenarios: Scenario[] = [
     key: 'labor',
     title: '劳动纠纷',
     icon: 'user-o',
-    color: '#4a6cf7',
+    accent: '#0f9d8f',
     description: '欠薪、辞退、加班费、不签合同',
     questions: [
       '经济补偿金怎么算？',
@@ -28,7 +27,7 @@ export const scenarios: Scenario[] = [
     key: 'rent',
     title: '租房住房',
     icon: 'home-o',
-    color: '#07c160',
+    accent: '#07c160',
     description: '押金、退租、房东违约',
     questions: [
       '房东不退押金怎么办？',
@@ -40,7 +39,7 @@ export const scenarios: Scenario[] = [
     key: 'marriage',
     title: '婚姻家事',
     icon: 'like-o',
-    color: '#ee0a24',
+    accent: '#e64980',
     description: '离婚、财产、抚养',
     questions: [
       '协议离婚需要什么材料和流程？',
@@ -51,13 +50,13 @@ export const scenarios: Scenario[] = [
   {
     key: 'traffic',
     title: '交通事故',
-    icon: 'logistics',
-    color: '#ff976a',
-    description: '赔偿、误工费、责任认定',
+    icon: 'warning-o',
+    accent: '#f2994a',
+    description: '赔偿、误工费、逃逸责任',
     questions: [
       '交通事故误工费怎么算？',
       '被车撞了对方全责怎么索赔？',
-      '交通事故责任怎么划分？',
+      '肇事逃逸导致责任加重怎么认定？',
     ],
   },
 ];

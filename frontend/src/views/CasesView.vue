@@ -1,188 +1,342 @@
-<!-- 案例库：顶部搜索栏 + 上传文档弹窗 + 嵌套子路由（各分类案例列表） -->
+<!-- 案例库：白底卡片 + 顶部色条 + 搜索/排序 + 详情入口 -->
 <template>
   <div class="cases-page">
-    <!-- 顶部栏：搜索栏 + 当前分类名 + 上传文档按钮 -->
-    <div class="cases-header">
+    <div class="chip-row">
+      <span class="chip-label">分类</span>
+      <div class="chips">
+        <div :class="['chip', {active: activeKey === ''}]" @click="activeKey = ''">全部</div>
+        <div
+          v-for="category in caseCategories"
+          :key="category.key"
+          :class="['chip', {active: activeKey === category.key}]"
+          @click="activeKey = category.key"
+        >
+          {{ category.title }}
+        </div>
+      </div>
+    </div>
+
+    <div class="search-row">
       <el-input
         v-model="keyword"
-        class="search-input"
-        placeholder="搜索案例关键词，如：抚养费、加班费、押金…"
+        class="kw-input"
+        placeholder="搜索关键词，如：抚养费、加班费、押金…"
         clearable
-        size="large"
-        @keyup.enter="noop"
+        @keyup.enter="reload"
       >
-        <template #append>
-          <el-button :icon="Search" @click="noop" />
+        <template #prefix>
+          <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <span class="category-name">{{ currentTitle }}</span>
-      <!-- 上传文档：弹窗内上传入库，上传后可在 AI 咨询中就该文档提问 -->
-      <el-button class="upload-btn" @click="uploadDialogVisible = true">
-        <el-icon><Paperclip /></el-icon>
-        <span>上传文档</span>
-      </el-button>
-    </div>
-
-    <!-- 嵌套子路由：当前分类的案例列表（加载中显示转圈） -->
-    <div v-loading="listLoading" class="cases-body">
-      <router-view />
-    </div>
-
-    <!-- 文档上传弹窗：上传后自动解析入库，可在 AI 咨询中提问其内容 -->
-    <el-dialog v-model="uploadDialogVisible" title="上传法律文档" width="480px">
-      <!-- 文件选择：不自动上传，选完文件后手动点按钮 -->
-      <el-upload
-        drag
-        action=""
-        :auto-upload="false"
-        :show-file-list="false"
-        :on-change="handleFileChange"
-      >
-        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-        <div class="el-upload__text">
-          拖拽文件到此处，或 <em>点击选择</em>
-        </div>
-        <template #tip>
-          <div class="el-upload__tip">
-            支持 PDF、Word、TXT，单个文件不超过 20MB；上传后自动解析、分块、向量化入库
-          </div>
-        </template>
-      </el-upload>
-      <!-- 已选文件 + 上传按钮 -->
-      <div class="upload-actions">
-        <span v-if="selectedFile" class="selected-file">已选择：{{ selectedFile.name }}</span>
-        <el-button
-          type="primary"
-          :loading="uploading"
-          :disabled="!selectedFile"
-          @click="doUpload"
-        >
-          {{ uploading ? '正在解析入库…' : '上传并入库' }}
-        </el-button>
+      <button class="search-btn" @click="reload">搜索</button>
+      <div class="sort-group">
+        <div :class="['sort-pill', {active: sort === 'new'}]" @click="sort = 'new'; reload()">最新</div>
+        <div :class="['sort-pill', {active: sort === 'hot'}]" @click="sort = 'hot'; reload()">最热</div>
       </div>
-    </el-dialog>
+    </div>
+
+    <div v-loading="listLoading" class="grid-wrap">
+      <el-empty v-if="!listLoading && caseList.length === 0" description="没有匹配的案例，换个关键词试试" />
+      <div v-else class="case-grid">
+        <div v-for="item in paged" :key="item.id" class="case-card">
+          <div class="accent-bar" :style="{background: accentOf(item.category)}"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <span class="cat-tag" :style="{color: accentOf(item.category), borderColor: accentOf(item.category)}">
+                {{ categoryTitle(item.category) }}
+              </span>
+              <span v-if="item.isPinned" class="pinned-badge">置顶</span>
+            </div>
+            <h3 class="case-title">{{ item.title }}</h3>
+            <p class="case-summary">{{ item.summary }}</p>
+            <div class="case-laws">
+              <span v-for="(law, i) in item.lawRefs" :key="i" class="law-chip">{{ law }}</span>
+            </div>
+            <div class="case-stats">
+              <span>{{ item.viewCount }} 浏览</span>
+              <span class="case-date">{{ item.createdAt }}</span>
+            </div>
+            <a class="detail-link" @click.prevent="goDetail(item.id)">查看详情 →</a>
+          </div>
+        </div>
+      </div>
+
+      <el-pagination
+        v-if="caseList.length > pageSize"
+        v-model:current-page="page"
+        class="case-pagination"
+        background
+        layout="prev, pager, next"
+        :page-size="pageSize"
+        :total="caseList.length"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, provide, ref} from 'vue';
-import {useRoute} from 'vue-router';
+import {computed, onMounted, ref, watch} from 'vue';
+import {useRoute, useRouter} from 'vue-router';
 import {ElMessage} from 'element-plus';
-import {Search, Paperclip, UploadFilled} from '@element-plus/icons-vue';
-import {getCategoryByKey} from '@/data/cases';
-// 案例数据：从后端 MySQL 获取（law_cases 表）
+import {Search} from '@element-plus/icons-vue';
+import {caseCategories, getCategoryByKey} from '@/data/cases';
 import {getCases} from '@/services/content';
 import type {LawCase} from '@/services/content';
-// 文档上传接口：后端自动完成 解析 → 分块 → 向量化 → 双写
-import {uploadDocument} from '@/services/knowledge';
 
-// 搜索关键词：提供给子路由组件过滤当前分类（响应式）
+const route = useRoute();
+const router = useRouter();
+
 const keyword = ref('');
-provide('caseKeyword', keyword);
-
-// 案例列表：全量从后端拉取，子路由按分类过滤
+const activeKey = ref('');
+const sort = ref<'new' | 'hot'>('new');
 const caseList = ref<LawCase[]>([]);
 const listLoading = ref(false);
-// 提供给嵌套子路由（CaseCategoryView）消费
-provide('caseList', caseList);
+const page = ref(1);
+const pageSize = 12;
 
-// 页面加载时拉取案例列表
 onMounted(async () => {
+  if (typeof route.query.category === 'string' && route.query.category) {
+    activeKey.value = route.query.category;
+  }
+  await reload();
+});
+
+watch(activeKey, () => {
+  page.value = 1;
+  reload();
+});
+
+async function reload() {
   listLoading.value = true;
+  page.value = 1;
   try {
-    caseList.value = await getCases();
+    caseList.value = await getCases({
+      category: activeKey.value || undefined,
+      keyword: keyword.value.trim() || undefined,
+      sort: sort.value
+    });
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '加载案例失败');
   } finally {
     listLoading.value = false;
   }
+}
+
+function categoryTitle(key: string): string {
+  return getCategoryByKey(key)?.title ?? key;
+}
+function accentOf(key: string): string {
+  return getCategoryByKey(key)?.accent ?? '#0f9d8f';
+}
+function goDetail(id: number) {
+  router.push(`/cases/${id}`);
+}
+
+const paged = computed(() => {
+  const start = (page.value - 1) * pageSize;
+  return caseList.value.slice(start, start + pageSize);
 });
-
-const route = useRoute();
-// 当前分类名（标题区展示；子路由切换分类时跟随）
-const currentTitle = computed(() => {
-  const category = getCategoryByKey(String(route.params.category || ''));
-  return category ? category.title : '案例库';
-});
-
-// 搜索按钮/回车：过滤是响应式的，这里留个钩子（后续可接后端全文检索）
-function noop() {
-  /* 关键词变化即过滤，无需额外动作 */
-}
-
-// ===== 文档上传弹窗 =====
-// 弹窗显隐
-const uploadDialogVisible = ref(false);
-// 当前选中的文件（el-upload 封装对象的 .raw 才是真正的 File）
-const selectedFile = ref<File | null>(null);
-// 上传/解析中标记（防重复提交 + 按钮 loading）
-const uploading = ref(false);
-
-// 选中文件回调：只暂存，不自动上传
-function handleFileChange(uploadFile: any) {
-  selectedFile.value = uploadFile.raw;
-}
-
-// 上传并入库：成功后提示分块数，引导去 AI 咨询就该文档提问
-async function doUpload() {
-  if (!selectedFile.value || uploading.value) return;
-  uploading.value = true;
-  try {
-    const result = await uploadDocument(selectedFile.value);
-    ElMessage.success(`《${result.filename}》已入库（${result.chunkCount} 个分块），可在 AI 咨询中提问它的内容`);
-    // 关弹窗并复位，方便下次上传
-    uploadDialogVisible.value = false;
-    selectedFile.value = null;
-  } catch (error: any) {
-    ElMessage.error('上传失败：' + (error?.message ?? '未知错误'));
-  } finally {
-    uploading.value = false;
-  }
-}
 </script>
 
 <style scoped>
 .cases-page {
-  max-width: 960px;
+  max-width: var(--fz-page-max, 1400px);
   margin: 0 auto;
 }
-.cases-header {
+.chip-row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
-.search-input {
-  flex: 1;
-  max-width: 560px;
-}
-.category-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-}
-/* 嵌套子路由容器：加载中转圈的高度兜底 */
-.cases-body {
-  min-height: 200px;
-}
-/* 上传文档按钮：靠右贴边 */
-.upload-btn {
-  margin-left: auto;
+.chip-label {
+  font-size: 14px;
+  color: var(--fz-text-secondary, #606266);
   flex-shrink: 0;
 }
-/* 上传弹窗内：已选文件信息 + 上传按钮一行 */
-.upload-actions {
-  margin-top: 12px;
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  padding: 6px 16px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid var(--fz-border, #E5E7EB);
+  font-size: 13px;
+  color: var(--fz-text-secondary, #606266);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s;
+}
+.chip:hover {
+  color: var(--fz-primary, #0f9d8f);
+  border-color: var(--fz-primary, #0f9d8f);
+}
+.chip.active {
+  background: var(--fz-primary, #0f9d8f);
+  border-color: var(--fz-primary, #0f9d8f);
+  color: #fff;
+}
+.search-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
+  margin-bottom: 16px;
 }
-.selected-file {
-  font-size: 13px;
-  color: #606266;
+.kw-input {
+  max-width: 420px;
+}
+.kw-input :deep(.el-input__wrapper) {
+  border-radius: 18px;
+}
+.search-btn {
+  border: none;
+  background: var(--fz-primary, #0f9d8f);
+  color: #fff;
+  font-size: 14px;
+  padding: 9px 22px;
+  border-radius: 18px;
+  cursor: pointer;
+}
+.search-btn:hover {
+  background: var(--fz-primary-hover, #0c8a7e);
+}
+.sort-group {
+  margin-left: auto;
+  display: flex;
+  background: #fff;
+  border: 1px solid var(--fz-border, #E5E7EB);
+  border-radius: 18px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.sort-pill {
+  padding: 7px 18px;
+  font-size: 13px;
+  color: var(--fz-text-secondary, #606266);
+  cursor: pointer;
+}
+.sort-pill + .sort-pill {
+  border-left: 1px solid var(--fz-border, #E5E7EB);
+}
+.sort-pill.active {
+  background: var(--fz-primary, #0f9d8f);
+  color: #fff;
+}
+.grid-wrap {
+  min-height: 200px;
+}
+.case-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.case-card {
+  background: var(--fz-card, #fff);
+  border: 1px solid var(--fz-border, #E5E7EB);
+  border-radius: var(--fz-radius, 12px);
+  overflow: hidden;
+  box-shadow: var(--fz-shadow);
+  transition: transform 0.15s, box-shadow 0.15s;
+  display: flex;
+  flex-direction: column;
+}
+.case-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--fz-shadow-hover);
+}
+.accent-bar {
+  height: 4px;
+  width: 100%;
+}
+.card-body {
+  padding: 16px 18px 18px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cat-tag {
+  display: inline-block;
+  font-size: 12px;
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 1px 8px;
+  background: #fff;
+}
+.pinned-badge {
+  margin-left: auto;
+  background: linear-gradient(135deg, #ff7a59, #f6524e);
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 10px;
+}
+.case-title {
+  margin: 0 0 8px;
+  font-size: var(--fz-card-title, 17px);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--fz-text, #303133);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.case-summary {
+  margin: 0;
+  font-size: 13px;
+  color: var(--fz-text-secondary, #606266);
+  line-height: 1.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.case-laws {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.law-chip {
+  font-size: 11px;
+  color: var(--fz-muted, #909399);
+  background: #f4f4f5;
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+.case-stats {
+  margin-top: auto;
+  padding-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--fz-muted, #909399);
+}
+.detail-link {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--fz-primary, #0f9d8f);
+  cursor: pointer;
+  text-decoration: none;
+}
+.detail-link:hover {
+  text-decoration: underline;
+}
+.case-pagination {
+  margin-top: 16px;
+  justify-content: center;
+}
+@media (max-width: 960px) {
+  .case-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

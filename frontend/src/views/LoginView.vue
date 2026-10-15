@@ -1,42 +1,98 @@
-<!-- 登录/注册页面：独立页面，不显示侧边栏 -->
+<!-- 登录/注册页面：记住我、确认密码、行内错误、加载态 -->
 <template>
   <div class="login-page">
     <div class="login-card">
-      <!-- 系统标题 -->
+      <div class="login-logo">⚖️</div>
       <h2 class="login-title">法制通</h2>
-      <p class="login-subtitle">法律智能问答系统</p>
-      <!-- 标题下的渐变分隔线 -->
+      <p class="login-subtitle">法律知识服务平台 · LEGAL KNOWLEDGE PLATFORM</p>
       <div class="title-divider"></div>
 
-      <!-- 登录/注册切换标签 -->
-      <el-tabs v-model="mode" class="login-tabs" stretch>
-        <!-- 登录面板 -->
+      <el-tabs v-model="mode" class="login-tabs" stretch @tab-change="onTabChange">
         <el-tab-pane label="登录" name="login">
+          <p class="demo-account">账号 user　密码 123456</p>
           <el-form @submit.prevent="handleSubmit">
-            <el-form-item>
-              <el-input v-model="username" placeholder="用户名" :prefix-icon="User" />
+            <el-form-item :class="{ 'is-error': !!fieldError.username }">
+              <el-input
+                v-model="username"
+                placeholder="用户名"
+                :prefix-icon="User"
+                :class="{ 'input-error': !!fieldError.username }"
+                @input="fieldError.username = ''"
+              />
+              <div v-if="fieldError.username" class="field-error">{{ fieldError.username }}</div>
             </el-form-item>
-            <el-form-item>
-              <el-input v-model="password" type="password" placeholder="密码" show-password :prefix-icon="Lock" @keyup.enter="handleSubmit" />
+            <el-form-item :class="{ 'is-error': !!fieldError.password }">
+              <el-input
+                v-model="password"
+                type="password"
+                placeholder="密码"
+                show-password
+                :prefix-icon="Lock"
+                :class="{ 'input-error': !!fieldError.password }"
+                @keyup.enter="handleSubmit"
+                @input="fieldError.password = ''"
+              />
+              <div v-if="fieldError.password" class="field-error">{{ fieldError.password }}</div>
             </el-form-item>
-            <el-button type="primary" class="submit-btn" :loading="loading" @click="handleSubmit">
-              登录
+            <div class="form-extra">
+              <el-checkbox v-model="rememberMe">记住我</el-checkbox>
+            </div>
+            <div v-if="formError" class="form-error">{{ formError }}</div>
+            <el-button type="primary" class="submit-btn" :loading="loading" :disabled="loading" @click="handleSubmit">
+              {{ loading ? '登录中...' : '登录' }}
             </el-button>
+            <p class="switch-hint">
+              还没有账号？
+              <a href="javascript:;" @click="mode = 'register'">立即注册</a>
+            </p>
           </el-form>
         </el-tab-pane>
 
-        <!-- 注册面板 -->
         <el-tab-pane label="注册" name="register">
           <el-form @submit.prevent="handleSubmit">
             <el-form-item>
-              <el-input v-model="username" placeholder="用户名（3-20 个字符）" :prefix-icon="User" />
+              <el-input
+                v-model="username"
+                placeholder="用户名（3-20 个字符）"
+                :prefix-icon="User"
+                :class="{ 'input-error': !!fieldError.username }"
+                @input="fieldError.username = ''"
+              />
+              <div v-if="fieldError.username" class="field-error">{{ fieldError.username }}</div>
             </el-form-item>
             <el-form-item>
-              <el-input v-model="password" type="password" placeholder="密码（至少 6 位）" show-password :prefix-icon="Lock" @keyup.enter="handleSubmit" />
+              <el-input
+                v-model="password"
+                type="password"
+                placeholder="密码（至少 6 位）"
+                show-password
+                :prefix-icon="Lock"
+                :class="{ 'input-error': !!fieldError.password }"
+                @input="fieldError.password = ''"
+              />
+              <div v-if="fieldError.password" class="field-error">{{ fieldError.password }}</div>
             </el-form-item>
-            <el-button type="primary" class="submit-btn" :loading="loading" @click="handleSubmit">
-              注册
+            <el-form-item>
+              <el-input
+                v-model="confirmPassword"
+                type="password"
+                placeholder="确认密码"
+                show-password
+                :prefix-icon="Lock"
+                :class="{ 'input-error': !!fieldError.confirm }"
+                @keyup.enter="handleSubmit"
+                @input="fieldError.confirm = ''"
+              />
+              <div v-if="fieldError.confirm" class="field-error">{{ fieldError.confirm }}</div>
+            </el-form-item>
+            <div v-if="formError" class="form-error">{{ formError }}</div>
+            <el-button type="primary" class="submit-btn" :loading="loading" :disabled="loading" @click="handleSubmit">
+              {{ loading ? '注册中...' : '注册' }}
             </el-button>
+            <p class="switch-hint">
+              已有账号？
+              <a href="javascript:;" @click="mode = 'login'">去登录</a>
+            </p>
           </el-form>
         </el-tab-pane>
       </el-tabs>
@@ -45,48 +101,79 @@
 </template>
 
 <script setup lang="ts">
-// 从 vue 中引入响应式 API 和路由
-import { ref } from 'vue';
+import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-// 引入 Element Plus 的消息提示和图标
 import { ElMessage } from 'element-plus';
 import { User, Lock } from '@element-plus/icons-vue';
-// 引入认证 API
 import { login, register } from '../services/auth';
 
-// 路由实例，登录成功后跳转首页
 const router = useRouter();
-
-// 当前处于登录还是注册面板
+const DEMO_USERNAME = 'user';
+const DEMO_PASSWORD = '123456';
 const mode = ref<'login' | 'register'>('login');
-// 表单数据
-const username = ref('');
-const password = ref('');
-// 提交中标记，防止重复点击
+const username = ref(DEMO_USERNAME);
+const password = ref(DEMO_PASSWORD);
+const confirmPassword = ref('');
+const rememberMe = ref(true);
 const loading = ref(false);
+const formError = ref('');
+const fieldError = reactive({ username: '', password: '', confirm: '' });
 
-// 提交处理：按当前面板调用登录或注册
+function clearErrors() {
+  formError.value = '';
+  fieldError.username = '';
+  fieldError.password = '';
+  fieldError.confirm = '';
+}
+
+function onTabChange() {
+  clearErrors();
+  if (mode.value === 'login') {
+    username.value = DEMO_USERNAME;
+    password.value = DEMO_PASSWORD;
+    confirmPassword.value = '';
+  } else {
+    username.value = '';
+    password.value = '';
+    confirmPassword.value = '';
+  }
+}
+
 const handleSubmit = async () => {
-  // 基本校验
-  if (!username.value.trim() || !password.value) {
-    ElMessage.warning('请输入用户名和密码');
+  clearErrors();
+  if (!username.value.trim()) {
+    fieldError.username = '请输入用户名';
     return;
+  }
+  if (!password.value) {
+    fieldError.password = '请输入密码';
+    return;
+  }
+  if (mode.value === 'register') {
+    if (password.value.length < 6) {
+      fieldError.password = '密码至少 6 位';
+      return;
+    }
+    if (password.value !== confirmPassword.value) {
+      fieldError.confirm = '两次输入的密码不一致';
+      return;
+    }
   }
   if (loading.value) return;
   loading.value = true;
   try {
     if (mode.value === 'login') {
-      await login(username.value.trim(), password.value);
+      await login(username.value.trim(), password.value, rememberMe.value);
       ElMessage.success('登录成功');
     } else {
-      await register(username.value.trim(), password.value);
+      await register(username.value.trim(), password.value, rememberMe.value);
       ElMessage.success('注册成功，已自动登录');
     }
-    // 成功就回首页
     router.push('/');
   } catch (error: any) {
-    // 失败提示后端返回的具体原因（如"用户名已被注册"）
-    ElMessage.error(error.response?.data?.message || error.message);
+    const msg = error.response?.data?.message || error.message || '操作失败';
+    // 登录失败统一文案（对齐方案）
+    formError.value = mode.value === 'login' ? '用户名或密码错误' : msg;
   } finally {
     loading.value = false;
   }
@@ -94,55 +181,111 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-/* 整页居中：深色渐变背景 */
 .login-page {
   height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1f2d3d 0%, #2b5876 50%, #4e4376 100%);
+  background: linear-gradient(135deg, #0f2d40 0%, #16324a 55%, #0d3b46 100%);
 }
-
-/* 登录卡片：白色微透明、大圆角、柔和阴影 */
 .login-card {
   width: 380px;
-  background-color: rgba(255, 255, 255, 0.96);
+  background-color: rgba(255, 255, 255, 0.97);
   border-radius: 16px;
   padding: 40px 36px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
 }
-
-/* 系统标题：主色渐变文字 */
+.login-logo {
+  text-align: center;
+  font-size: 42px;
+  line-height: 1;
+  margin-bottom: 10px;
+}
 .login-title {
   margin: 0;
   text-align: center;
   font-size: 30px;
-  /* 渐变文字：背景裁剪成文字形状 */
-  background: linear-gradient(90deg, #409eff, #67c23a);
+  letter-spacing: 4px;
+  background: linear-gradient(90deg, #2ad4a4, #0f9d8f);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
-
-/* 副标题 */
 .login-subtitle {
   margin: 10px 0 0;
   text-align: center;
   color: #909399;
-  font-size: 14px;
+  font-size: 12px;
+  letter-spacing: 1px;
 }
-
-/* 标题下的渐变分隔线 */
 .title-divider {
   width: 60px;
   height: 3px;
   margin: 20px auto 24px;
   border-radius: 2px;
-  background: linear-gradient(90deg, #409eff, #67c23a);
+  background: linear-gradient(90deg, #2ad4a4, #0f9d8f);
 }
-
-/* 提交按钮占满整行 */
+.login-tabs :deep(.el-tabs__item.is-active) {
+  color: #0f9d8f;
+}
+.login-tabs :deep(.el-tabs__active-bar) {
+  background-color: #0f9d8f;
+}
+.demo-account {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f3fbf9;
+  color: #0f766e;
+  font-size: 13px;
+  text-align: center;
+}
+.form-extra {
+  margin: -4px 0 12px;
+}
+.form-error {
+  color: var(--fz-error, #f56c6c);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.field-error {
+  color: var(--fz-error, #f56c6c);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+.input-error :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--fz-error, #f56c6c) inset !important;
+}
 .submit-btn {
   width: 100%;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  border-color: transparent;
+  font-weight: 600;
+  letter-spacing: 4px;
+}
+.submit-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2ad4a4 0%, #0f9d8f 100%);
+  border-color: transparent;
+}
+.submit-btn:active:not(:disabled) {
+  background: #0a7369;
+}
+.submit-btn.is-disabled,
+.submit-btn:disabled {
+  opacity: 0.65;
+}
+.switch-hint {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: #909399;
+}
+.switch-hint a {
+  color: #0f9d8f;
+  text-decoration: none;
+}
+.switch-hint a:hover {
+  text-decoration: underline;
 }
 </style>

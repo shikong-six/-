@@ -1,6 +1,7 @@
 //MySQL数据库连接服务
 //使用连接池管理连接，避免每次查询都新建/销毁连接
 import mysql from 'mysql2/promise'
+import {comparePassword, hashPassword} from './auth'
 
 //创建连接池，参数全部从环境变量读取
 const pool=mysql.createPool({
@@ -101,6 +102,75 @@ async function initDb(){
     } catch (err: any) {
         // 迁移失败只打日志不阻断启动
         console.error('chat_history 补 feedback 列失败:', err.message);
+    }
+    // ===== 个人中心：用户浏览案例去重表 =====
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS user_case_views (
+                user_id INT NOT NULL COMMENT '用户ID',
+                case_id INT NOT NULL COMMENT '案例ID',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '首次浏览时间',
+                PRIMARY KEY (user_id, case_id),
+                INDEX idx_user (user_id)
+            ) COMMENT='用户浏览案例记录（去重）'
+        `);
+    } catch (err: any) {
+        console.error('初始化 user_case_views 表失败:', err.message);
+    }
+    // ===== 自动迁移：documents 表补 user_id（个人上传统计）=====
+    try {
+        const [columns] = await pool.query<any[]>(
+            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'documents' AND COLUMN_NAME = 'user_id'`
+        );
+        if (columns.length === 0) {
+            await pool.query(
+                `ALTER TABLE documents ADD COLUMN user_id INT NULL COMMENT '上传用户ID'`
+            );
+            console.log('documents 表已补充 user_id 列');
+        }
+    } catch (err: any) {
+        console.error('documents 补 user_id 列失败:', err.message);
+    }
+    // 引用条文随回答入库。刷新后从历史还原，不靠当次页面里的临时数据。
+    try {
+        const [columns] = await pool.query<any[]>(
+            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_history' AND COLUMN_NAME = 'references_json'`
+        );
+        if (columns.length === 0) {
+            await pool.query(
+                `ALTER TABLE chat_history ADD COLUMN references_json MEDIUMTEXT NULL COMMENT '回答引用的法条 JSON'`
+            );
+            console.log('chat_history 表已补充 references_json 列');
+        }
+    } catch (err: any) {
+        console.error('chat_history 补 references_json 列失败:', err.message);
+    }
+    // 演示账号写在两端登录页上，库里没有就建一个，密码不对就改成页面上的那组
+    try {
+        const demoUser = 'user';
+        const demoPassword = '123456';
+        const [rows] = await pool.query<any[]>(
+            'SELECT id, password_hash FROM users WHERE username = ?',
+            [demoUser]
+        );
+        const passwordHash = await hashPassword(demoPassword);
+        if (rows.length === 0) {
+            await pool.query(
+                'INSERT INTO users (username, password_hash) VALUES (?,?)',
+                [demoUser, passwordHash]
+            );
+            console.log('已创建演示账号 user');
+        } else if (!(await comparePassword(demoPassword, rows[0].password_hash))) {
+            await pool.query(
+                'UPDATE users SET password_hash = ? WHERE id = ?',
+                [passwordHash, rows[0].id]
+            );
+            console.log('已将演示账号 user 的密码同步为登录页上的密码');
+        }
+    } catch (err: any) {
+        console.error('创建演示账号失败:', err.message);
     }
 }
 // 异步执行建表，失败只打日志不阻断启动（可能是数据库没起）

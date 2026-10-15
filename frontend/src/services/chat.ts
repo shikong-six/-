@@ -3,9 +3,15 @@ import request from './request';
 
 // 引用来源：后端召回的法条块信息
 export interface Reference {
-  docName: string;    // 出自哪个文档
+  docName: string;    // 出自哪个文档（库里的原始文件名，含日期和扩展名）
   chunkIndex: number; // 第几个分块
   text: string;       // 法条原文
+}
+
+// 引用卡片上的法律名。文件名里的 _20121228 和 .docx 只用于入库，不显示。
+export function lawDisplayName(docName: string): string {
+  const name = docName.replace(/\.[^.]+$/, '').replace(/_\d{8}$/, '').trim();
+  return name || docName;
 }
 
 // 定义消息类型
@@ -29,6 +35,7 @@ export interface SessionMessage {
   question: string;    // 用户问题
   answer: string;      // AI 回答
   feedback: number | null; // 用户反馈：1赞 -1踩 null未反馈
+  references?: Reference[]; // 回答引用的法条，刷新后从历史还原
   createdAt: string;   // 问答时间
 }
 
@@ -85,10 +92,11 @@ export async function sendMessageStream(
     onToken: (token: string) => void;
     onReferences: (references: Reference[]) => void;
     onSession: (sessionId: number | null, historyId: number | null) => void;
-  }
+  },
+  signal?: AbortSignal
 ): Promise<void> {
-  // 从本地存储取 token（对齐 request.ts 拦截器的取法）
-  const token = localStorage.getItem('fazhitong_token');
+  // 从 local / session 取 token（对齐「记住我」两种存储）
+  const token = localStorage.getItem('fazhitong_token') || sessionStorage.getItem('fazhitong_token');
   // 发起 POST 请求到流式接口
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
@@ -98,11 +106,15 @@ export async function sendMessageStream(
       Authorization: `Bearer ${token}`
     },
     // 消息历史和会话 ID 放在请求体里
-    body: JSON.stringify({messages, sessionId: sessionId ?? null})
+    body: JSON.stringify({messages, sessionId: sessionId ?? null}),
+    signal
   });
   // 401 处理（对齐 request.ts 响应拦截器的行为：清凭证跳登录）
   if (response.status === 401) {
     localStorage.removeItem('fazhitong_token');
+    sessionStorage.removeItem('fazhitong_token');
+    localStorage.removeItem('fazhitong_username');
+    sessionStorage.removeItem('fazhitong_username');
     if (window.location.pathname !== '/login') {
       window.location.href = '/login';
     }
@@ -136,20 +148,37 @@ export async function sendMessageStream(
       const line = event.trim();
       // 只认 data: 开头的数据行
       if (!line.startsWith('data:')) continue;
-      // 解析 data 后面的 JSON
-      const data = JSON.parse(line.slice(5).trim());
+      // 解析 data 后面的 JSON。
+      // ★ 必须包 try/catch：流式传输中偶尔会收到被截断的半条事件，
+      //   裸奔的 JSON.parse 一抛就会中断整条流，后半段回答全部丢失。
+      //   h5 端（composables/useChatStream.ts）本来就包了 try/catch，这里补齐，两端一致。
+      //   顺便收进一个显式类型，替掉原来的隐式 any。
+      let data: {
+        type?: string;
+        message?: string;
+        content?: string;
+        references?: Reference[];
+        sessionId?: number | null;
+        historyId?: number | null;
+      };
+      try {
+        data = JSON.parse(line.slice(5).trim());
+      } catch {
+        // 单条坏事件跳过即可：它后面的 token 事件仍然会正常到达
+        continue;
+      }
       // status 事件：检索完成的进度反馈（可选回调，没传就跳过）
       if (data.type === 'status') {
-        callbacks.onStatus?.(data.message);
+        callbacks.onStatus?.(data.message ?? '');
       } else if (data.type === 'token') {
         // token 事件：把内容抛给页面逐字渲染
-        callbacks.onToken(data.content);
+        callbacks.onToken(data.content ?? '');
       } else if (data.type === 'references') {
         // 引用来源：生成完毕，交给页面展示
-        callbacks.onReferences(data.references);
+        callbacks.onReferences(data.references ?? []);
       } else if (data.type === 'session') {
         // 会话 ID + 历史记录 ID：交给页面更新路由、点亮点赞按钮
-        callbacks.onSession(data.sessionId, data.historyId);
+        callbacks.onSession(data.sessionId ?? null, data.historyId ?? null);
       } else if (data.type === 'error') {
         // 后端流中途出错
         throw new Error(data.message || '生成失败');

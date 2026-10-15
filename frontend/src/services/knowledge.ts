@@ -24,6 +24,7 @@ export interface UploadResult {
   filename: string;
   size: number;
   chunkCount: number;
+  articleCount?: number;  // 顺带同步到法律条文库的"第X条"式条文条数（0/无 = 文档里没有条文结构）
 }
 
 // 后端统一返回格式

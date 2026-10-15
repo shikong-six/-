@@ -1,29 +1,38 @@
-// 首页统计接口封装：知识库文档数 / 累计问答数 / 今日问答数
-// 统一走 request 实例（自动携带 token，401 自动跳登录）
+// 首页统计 + 个人中心统计
 import request from './request';
 
-// 统计数据结构（对应后端 /api/stats 返回的 data）
+// 首页统计（知识库文档数 / 累计问答数 / 今日问答数）
 export interface StatsData {
-  documentCount: number;  // 知识库文档总数
-  totalQaCount: number;   // 累计问答数
-  todayQaCount: number;   // 今日问答数
+  documentCount: number;
+  totalQaCount: number;
+  todayQaCount: number;
 }
 
-// 后端统一返回格式
+// 个人中心统计
+export interface ProfileStats {
+  qaCount: number;        // 累计问答
+  caseViewCount: number;  // 浏览案例（去重）
+  uploadCount: number;    // 上传文档
+}
+
 interface ApiResponse<T> {
   success: boolean;
   data: T;
   message?: string;
 }
 
-// 获取首页统计卡片数据
 export async function getStats(): Promise<StatsData> {
-  // 发送 GET 请求到 /api/stats
   const response = await request.get<ApiResponse<StatsData>>('/stats');
-  // 后端返回成功则取 data
   if (response.data.success) {
     return response.data.data;
   }
-  // 失败则抛出后端给的错误信息
   throw new Error(response.data.message || '获取统计数据失败');
+}
+
+export async function getProfileStats(): Promise<ProfileStats> {
+  const response = await request.get<ApiResponse<ProfileStats>>('/stats/me');
+  if (response.data.success) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || '获取个人统计失败');
 }

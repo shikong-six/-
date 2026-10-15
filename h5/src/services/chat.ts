@@ -4,9 +4,15 @@ import request from './request';
 
 // 引用来源：后端召回的法条块信息
 export interface Reference {
-  docName: string;    // 出自哪个文档
+  docName: string;    // 出自哪个文档（库里的原始文件名，含日期和扩展名）
   chunkIndex: number; // 第几个分块
   text: string;       // 法条原文
+}
+
+// 引用卡片上的法律名。文件名里的 _20121228 和 .docx 只用于入库，不显示。
+export function lawDisplayName(docName: string): string {
+  const name = docName.replace(/\.[^.]+$/, '').replace(/_\d{8}$/, '').trim();
+  return name || docName;
 }
 
 // 发给后端的消息（只带角色和内容）
@@ -37,6 +43,7 @@ export interface SessionMessage {
   question: string;    // 用户问题
   answer: string;      // AI 回答
   feedback: number | null; // 用户反馈：1赞 -1踩 null未反馈
+  references?: Reference[]; // 回答引用的法条，刷新后从历史还原
   createdAt: string;   // 问答时间
 }
 
@@ -71,5 +78,16 @@ export async function deleteSession(sessionId: number): Promise<void> {
   const response = await request.delete<ApiResponse<{id: number}>>(`/chat/sessions/${sessionId}`);
   if (!response.data.success) {
     throw new Error(response.data.message || '删除失败');
+  }
+}
+
+// feedback：1 点赞 / -1 点踩 / 0 取消
+export async function setFeedback(id: number, feedback: number): Promise<void> {
+  const response = await request.put<ApiResponse<{id: number; feedback: number}>>(
+    `/chat/history/${id}/feedback`,
+    {feedback}
+  );
+  if (!response.data.success) {
+    throw new Error(response.data.message || '反馈失败');
   }
 }

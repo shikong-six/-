@@ -6,7 +6,14 @@ module.exports={
     entry:'./src/main.ts',
     output:{
         path:path.resolve(__dirname,'dist'),
-        filename:'bundle.js',
+        // 内容哈希：文件内容变了才换名字，没变就命中浏览器缓存。
+        // 原来固定叫 bundle.js —— dev 里靠 devServer 的 no-store 兜着，
+        // 但生产环境没有这层保护，发包后用户可能一直拿到旧包。
+        // ★ 分包之后这条是必须的：main / element-plus / vendors / runtime
+        //   都是初始 chunk，共用一个固定文件名会直接构建冲突。
+        filename:'[name].[contenthash:8].js',
+        // 异步 chunk（懒加载路由）也要带哈希，否则同样会被缓存住旧版本
+        chunkFilename:'[name].[contenthash:8].chunk.js',
         // 资源根路径固定为 /：history 模式下深链（/cases/marriage）访问时，
         // index.html 里的相对路径 bundle.js 会被解析成 /cases/bundle.js 导致 404 白屏
         publicPath:'/',
@@ -47,6 +54,31 @@ module.exports={
             template:'./public/index.html'
         })
     ],
+    // ===== 产物分包与长期缓存 =====
+    optimization:{
+        // runtime 里存着 chunk 映射关系，它跟着业务代码变；单独拆出来后，
+        // 第三方包的内容哈希不会因为业务改动而失效
+        runtimeChunk:'single',
+        splitChunks:{
+            cacheGroups:{
+                // Element Plus 最重（当前是全量引入，1MiB 量级）且几乎不随业务改动，
+                // 单独一包：用户只需下载一次，后续改业务不会让它重新下载
+                elementPlus:{
+                    test:/[\\/]node_modules[\\/]element-plus[\\/]/,
+                    name:'element-plus',
+                    chunks:'all',
+                    priority:30
+                },
+                // 其余第三方（vue / axios / marked / dompurify …）合成一包
+                vendors:{
+                    test:/[\\/]node_modules[\\/]/,
+                    name:'vendors',
+                    chunks:'all',
+                    priority:10
+                }
+            }
+        }
+    },
     devServer:{
         port:8080,
         hot:true,

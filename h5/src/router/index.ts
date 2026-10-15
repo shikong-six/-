@@ -41,6 +41,21 @@ const routes = [
     name: 'Profile',
     component: () => import('@/views/ProfileView.vue'),
   },
+  {
+    path: '/laws',
+    name: 'Laws',
+    component: () => import('@/views/LawsView.vue'),
+  },
+  {
+    path: '/cases',
+    name: 'Cases',
+    component: () => import('@/views/CasesView.vue'),
+  },
+  {
+    path: '/cases/:id',
+    name: 'CaseDetail',
+    component: () => import('@/views/CaseDetailView.vue'),
+  },
 ];
 
 const router = createRouter({

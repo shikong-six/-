@@ -4,13 +4,42 @@ import {Router} from 'express';
 import {chatWithKimi, chatWithKimiStream} from '../services/kimi'
 // MySQL 连接池（存问答历史）
 import pool from '../services/db'
-// Ollama 向量化（把用户问题转成查询向量）
-import {embedQuery} from '../services/embedding'
-// LanceDB 相似度检索
-import {searchChunks} from '../services/vectorStore'
+// 检索：本机重排。复杂问题按连接词拆开，再逐件检索。
+import {buildLegalPrompt, flattenReferences, questionForRetrieval, retrieveForUserQuestion} from '../services/retrieve'
+import {earlierFactNote, packConversation} from '../services/conversation'
 
 // 创建路由实例
 const router=Router();
+
+// ===== 提问输入质量校验（第一道防线：垃圾输入不进 RAG 流程，防锚定幻觉）=====
+// 返回 null = 合法；否则返回拒绝原因文案。与前端 ChatView 的校验保持一致。
+function validateQuestion(text:string):string|null{
+    // 去掉标点、符号、空白、控制字符后统计有效字符
+    const meaningful=text.replace(/[\p{P}\p{S}\p{Z}\p{C}]/gu,'');
+    if(meaningful.length<2){
+        return '请输入有效的法律问题（至少 2 个字），描述你遇到的具体情况';
+    }
+    // 同一字符重复刷屏："aaaaaaaa"、"哈哈哈哈"、"？？？？"（去标点后）
+    if(meaningful.length>=4&&/^(.)\1+$/u.test(meaningful)){
+        return '请输入有效的法律问题，重复内容无法解答';
+    }
+    // 纯拉丁字母长串（键盘乱敲）：中文法律咨询场景下无意义（短代码如"N+1"不拦）
+    if(!/[一-鿿]/.test(text)&&meaningful.length>=8){
+        return '请用中文描述你遇到的法律问题';
+    }
+    return null;
+}
+
+function parseStoredReferences(raw: unknown): Array<{docName: string; chunkIndex: number; text: string}> {
+    if (!raw) return [];
+    try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter((item) => item && typeof item.docName === 'string' && typeof item.text === 'string');
+    } catch {
+        return [];
+    }
+}
 
 // 解析/创建会话：确保本次问答挂在一个属于当前用户的会话上
 // 传了合法 sessionId（存在且属于当前用户）就沿用；否则新建会话（标题取问题前 20 字）
@@ -44,6 +73,8 @@ router.post('/',async (req,res)=>{
 
         // 如果前端没传 messages，返回 400 错误
         if(!messages||!Array.isArray(messages)){
+            // 这条 400 原先毫无痕迹：不建会话、不写历史、不打日志，出问题时完全黑盒
+            console.warn('[chat] messages 不是数组:', typeof messages, '｜请求体:', JSON.stringify(req.body).slice(0, 160));
             return res.status(400).json({
                 success:false,
                 message:'参数错误,messages必须是一个数组'
@@ -53,64 +84,46 @@ router.post('/',async (req,res)=>{
         // 取最后一条用户消息作为本次要回答的问题
         const question=messages[messages.length-1].content;
 
+        // 输入质量校验：垃圾问题直接 400，不进 RAG（在发 SSE 头之前，还能正常返回 JSON）
+        const invalid=validateQuestion(question);
+        if(invalid){
+            // 记下被拒的原文：只显示状态码时根本查不出是谁发了什么
+            console.warn('[chat] 输入校验拒绝:', invalid, '｜收到:', JSON.stringify(question).slice(0, 160));
+            return res.status(400).json({success:false,message:invalid});
+        }
+
         // 解析会话：没有合法 sessionId 就新建（标题取问题前 20 字）
         const sid=await resolveSession(req.user!.userId,sessionId,question);
 
-        // ===== RAG 第一步：检索向量库，召回相关法条 =====
-        // references 保存召回的文本块，最后会一起返回给前端展示引用
+        // 先在本地分清有几件事。一件事检索后本机重排，最多留 4 条；好几件事则逐件检索、逐件重排。
+        const asked = questionForRetrieval(messages);
         let references:Array<{docName:string;chunkIndex:number;text:string}>=[];
+        let issues:Array<{question:string;references:typeof references}>=[];
         try{
-            // 1. 把问题文本向量化
-            const queryVector=await embedQuery(question);
-            // 2. 在向量库里找与问题最相近的 3 个文本块
-            const chunks=await searchChunks(queryVector,3);
-            references=chunks;
-            //按"文档名+块号"去重，避免内容重叠的分块重复出现在引用里
-            const seen=new Set<string>()
-            references=references.filter(chunk=>{
-                //用文档名#块号作为唯一标识
-                const key=`${chunk.docName}#${chunk.chunkIndex}`;
-                //已经出现过就过滤掉
-                if(seen.has(key))
-                    return false
-                //没出现过就记下，保留这一条
-                seen.add(key)
-                return true;
-            })
+            const groups = await Promise.all(asked.queries.map((query) => retrieveForUserQuestion(query)));
+            for (const group of groups) issues.push(...group);
+            references=flattenReferences(issues);
         }catch(searchError:any){
-            // 检索失败（比如 Ollama 没启动）不阻断问答，只是本次没有上下文，记个日志
-            console.error('向量检索失败，本次问答不带知识库上下文:',searchError.message);
+            console.error('检索失败，本次问答不带知识库上下文:',searchError.message);
         }
 
-        // ===== RAG 第二步：把召回的法条拼进 system 提示词 =====
-        // 每个文本块编号放进【资料】区，并要求 Kimi 只依据资料回答
-        const context=references.map((chunk,index)=>
-            `【资料${index+1}】（出自《${chunk.docName}》第${chunk.chunkIndex+1}块）\n${chunk.text}`
-        ).join('\n\n');
-
-        // system 消息：告诉 Kimi 它是谁、按什么规则回答、资料有哪些
+        const packed = packConversation(messages);
         const systemMessage={
             role:'system' as const,
-            content:`你是"法制通"法律智能问答助手。请根据下面提供的法律条文资料回答用户的问题。
-回答要求：
-1. 只依据提供的资料回答，不要编造法条；资料里没有的内容，要明确说明"知识库中未找到相关依据"。
-2. 尽量引用资料中的原文条款表述。
-3. 用中文回答，条理清晰。
-
-${context?`【法律资料】\n${context}`:'（本次未检索到相关法律资料，请基于常识谨慎回答，并提示用户知识库可能为空。）'}`
+            content:buildLegalPrompt(issues, asked.followUp) + earlierFactNote(packed.earlierFacts)
         };
 
         // ===== RAG 第三步：带上下文调用 Kimi 生成答案 =====
-        // messages 是用户的多轮对话历史，前面补上 system 消息
-        const reply=await chatWithKimi([systemMessage,...messages]);
+        // 最近几轮原话保留。更早的回答不带上，避免旧法条被后面的问题沿用。
+        const reply=await chatWithKimi([systemMessage,...packed.history]);
 
         // 把本次问答写入 MySQL 历史表（带上会话 ID；存库失败不影响回复，只记日志）
         // 拿到自增 ID 一并返回：前端点赞/点踩要用它定位这条记录
         let historyId:number|null=null;
         try{
             const [insertResult]=await pool.query<any>(
-                'INSERT INTO chat_history (question,answer,user_id,session_id) VALUES (?,?,?,?)',
-                [question,reply,req.user!.userId,sid]
+                'INSERT INTO chat_history (question,answer,user_id,session_id,references_json) VALUES (?,?,?,?,?)',
+                [question,reply,req.user!.userId,sid,JSON.stringify(references)]
             );
             // 取出刚插入记录的自增 ID
             historyId=insertResult.insertId;
@@ -147,6 +160,8 @@ router.post('/stream', async (req, res) => {
 
         // 如果前端没传 messages，返回 400 错误
         if (!messages || !Array.isArray(messages)) {
+            // 这条 400 原先毫无痕迹：不建会话、不写历史、不打日志，出问题时完全黑盒
+            console.warn('[chat] messages 不是数组:', typeof messages, '｜请求体:', JSON.stringify(req.body).slice(0, 160));
             return res.status(400).json({
                 success: false,
                 message: '参数错误,messages必须是一个数组'
@@ -156,53 +171,18 @@ router.post('/stream', async (req, res) => {
         // 取最后一条用户消息作为本次要回答的问题
         const question = messages[messages.length - 1].content;
 
+        // 输入质量校验：垃圾问题直接 400（此时还没发 SSE 头，可以正常返回 JSON）
+        const invalid = validateQuestion(question);
+        if (invalid) {
+            // 记下被拒的原文：只显示状态码时根本查不出是谁发了什么
+            console.warn('[chat] 输入校验拒绝:', invalid, '｜收到:', JSON.stringify(question).slice(0, 160));
+            return res.status(400).json({success: false, message: invalid});
+        }
+
         // 解析会话：没有合法 sessionId 就新建（标题取问题前 20 字）
         const sid = await resolveSession(req.user!.userId, sessionId, question);
 
-        // ===== RAG 检索：和非流式接口同一套逻辑 =====
-        // references 保存召回的文本块，流结束后推给前端展示引用
-        let references: Array<{docName: string; chunkIndex: number; text: string}> = [];
-        try {
-            // 1. 把问题文本向量化
-            const queryVector = await embedQuery(question);
-            // 2. 在向量库里找与问题最相近的 3 个文本块
-            const chunks = await searchChunks(queryVector, 3);
-            references = chunks;
-            // 按"文档名+块号"去重，避免内容重叠的分块重复出现在引用里
-            const seen = new Set<string>();
-            references = references.filter(chunk => {
-                // 用文档名#块号作为唯一标识
-                const key = `${chunk.docName}#${chunk.chunkIndex}`;
-                // 已经出现过就过滤掉
-                if (seen.has(key)) return false;
-                // 没出现过就记下，保留这一条
-                seen.add(key);
-                return true;
-            });
-        } catch (searchError: any) {
-            // 检索失败（比如 Ollama 没启动）不阻断问答，只是本次没有上下文，记个日志
-            console.error('向量检索失败，本次问答不带知识库上下文:', searchError.message);
-        }
-
-        // ===== 组装 system 提示词（与非流式一致）=====
-        // 每个文本块编号放进【资料】区，并要求 Kimi 只依据资料回答
-        const context = references.map((chunk, index) =>
-            `【资料${index + 1}】（出自《${chunk.docName}》第${chunk.chunkIndex + 1}块）\n${chunk.text}`
-        ).join('\n\n');
-
-        // system 消息：告诉 Kimi 它是谁、按什么规则回答、资料有哪些
-        const systemMessage = {
-            role: 'system' as const,
-            content: `你是"法制通"法律智能问答助手。请根据下面提供的法律条文资料回答用户的问题。
-回答要求：
-1. 只依据提供的资料回答，不要编造法条；资料里没有的内容，要明确说明"知识库中未找到相关依据"。
-2. 尽量引用资料中的原文条款表述。
-3. 用中文回答，条理清晰。
-
-${context ? `【法律资料】\n${context}` : '（本次未检索到相关法律资料，请基于常识谨慎回答，并提示用户知识库可能为空。）'}`
-        };
-
-        // ===== 设置 SSE 响应头 =====
+        // ===== 设置 SSE 响应头（检索和重排都比较慢，先把头发出去，页面才有进度）=====
         // text/event-stream：告诉浏览器这是 SSE 流
         res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
         // 禁止缓存，保证每次拿到新数据
@@ -212,16 +192,30 @@ ${context ? `【法律资料】\n${context}` : '（本次未检索到相关法�
         // 立即把响应头发出去（不然前端要等第一块数据才能收到头）
         res.flushHeaders();
 
-        // ===== 先推一条进度事件，再调 Kimi =====
-        // Kimi 免费档首字可能要十几秒，前端光有"正在检索"太干等；
-        // 检索已经完成，先把结果数量推给前端显示"已检索到 N 条相关资料"，
-        // 把长等待拆成"检索完成 → 生成中"两段有反馈的进度
-        res.write(`data: ${JSON.stringify({
-            type: 'status',
-            message: references.length > 0
-                ? `已检索到 ${references.length} 条相关资料，正在生成回答…`
-                : '知识库未检索到相关资料，正在生成回答…'
-        })}\n\n`);
+        const writeStatus = (message: string) => {
+            res.write(`data: ${JSON.stringify({type: 'status', message})}\n\n`);
+        };
+
+        const asked = questionForRetrieval(messages);
+        // 追问先查前面的事实。这句还有新问题时，再查这句。
+        let references: Array<{docName: string; chunkIndex: number; text: string}> = [];
+        let issues: Array<{question: string; references: typeof references}> = [];
+        try {
+            const groups = await Promise.all(asked.queries.map((query) => retrieveForUserQuestion(query, writeStatus)));
+            for (const group of groups) issues.push(...group);
+            references = flattenReferences(issues);
+        } catch (searchError: any) {
+            console.error('检索失败，本次问答不带知识库上下文:', searchError.message);
+        }
+        const packed = packConversation(messages);
+        const systemMessage = {
+            role: 'system' as const,
+            content: buildLegalPrompt(issues, asked.followUp) + earlierFactNote(packed.earlierFacts),
+        };
+
+        writeStatus(references.length > 0
+            ? `已核对 ${references.length} 条相关资料，正在生成回答…`
+            : '知识库未检索到相关资料，正在生成回答…');
 
         // 客户端中途断开标记（关闭页面/切走都会触发）
         let clientGone = false;
@@ -232,7 +226,7 @@ ${context ? `【法律资料】\n${context}` : '（本次未检索到相关法�
 
         // ===== 调用 Kimi 流式生成，收到 token 就推给前端 =====
         // reply 是拼好的完整回复，结束后用于写历史
-        const reply = await chatWithKimiStream([systemMessage, ...messages], (token) => {
+        const reply = await chatWithKimiStream([systemMessage, ...packed.history], (token) => {
             // SSE 协议：每条消息格式为 "data: <json>\n\n"（两个换行表示一条结束）
             res.write(`data: ${JSON.stringify({type: 'token', content: token})}\n\n`);
         }, () => clientGone);
@@ -249,8 +243,8 @@ ${context ? `【法律资料】\n${context}` : '（本次未检索到相关法�
         try {
             // 把本次问答写入 MySQL 历史表
             const [insertResult] = await pool.query<any>(
-                'INSERT INTO chat_history (question,answer,user_id,session_id) VALUES (?,?,?,?)',
-                [question, reply, req.user!.userId, sid]
+                'INSERT INTO chat_history (question,answer,user_id,session_id,references_json) VALUES (?,?,?,?,?)',
+                [question, reply, req.user!.userId, sid, JSON.stringify(references)]
             );
             // 取出刚插入记录的自增 ID
             historyId = insertResult.insertId;
@@ -288,6 +282,7 @@ ${context ? `【法律资料】\n${context}` : '（本次未检索到相关法�
 router.get('/sessions',async (req,res)=>{
     try{
         //关联 chat_history 统计每个会话的消息数；updated_at 起别名 updatedAt 对齐前端命名
+        //HAVING messageCount > 0：只返回真正提问留下记录的会话，空会话（未提问/入库失败）不展示
         const [rows]=await pool.query(
             `SELECT s.id, s.title, s.created_at AS createdAt, s.updated_at AS updatedAt,
                     COUNT(h.id) AS messageCount
@@ -295,6 +290,7 @@ router.get('/sessions',async (req,res)=>{
              LEFT JOIN chat_history h ON h.session_id = s.id
              WHERE s.user_id=?
              GROUP BY s.id
+             HAVING messageCount > 0
              ORDER BY s.updated_at DESC
              LIMIT 100`,
             [req.user!.userId]
@@ -321,12 +317,20 @@ router.get('/sessions/:id/messages',async (req,res)=>{
             return res.status(404).json({success:false,message:'会话不存在'});
         }
         //取该会话的全部问答，按时间正序（带 id 和 feedback：id 供点赞定位，feedback 供回填已点赞状态）
-        const [rows]=await pool.query(
-            'SELECT id,question,answer,feedback,created_at AS createdAt FROM chat_history WHERE session_id=? ORDER BY id ASC',
+        const [rows]=await pool.query<any[]>(
+            'SELECT id,question,answer,feedback,references_json AS referencesJson,created_at AS createdAt FROM chat_history WHERE session_id=? ORDER BY id ASC',
             [id]
         );
+        const data = rows.map((row) => ({
+            id: row.id,
+            question: row.question,
+            answer: row.answer,
+            feedback: row.feedback,
+            createdAt: row.createdAt,
+            references: parseStoredReferences(row.referencesJson),
+        }));
         //返回消息列表
-        res.json({success:true,data:rows});
+        res.json({success:true,data});
     }catch(error:any){
         //查询失败返回500
         console.error('查询会话消息失败:',error.message);

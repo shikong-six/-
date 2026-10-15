@@ -7,6 +7,8 @@ import {parseDocument} from '../services/documentParser'
 import {splitText} from '../services/textSplitter'
 import {embedTexts, embedQuery} from '../services/embedding'
 import {addChunks, searchChunks, deleteChunksByDocName, ChunkRecord} from '../services/vectorStore'
+// 上传文档后把"第X条"式条文同步进法律条文库（文档删除时配套清理）
+import {syncDocArticles, deleteDocArticles} from '../services/content'
 
 const router=Router()
 
@@ -51,8 +53,19 @@ router.post('/upload',upload.single('file'),async (req,res)=>{
             });
         }
 
-        // 2. 文本分块
-        const chunks=splitText(text);
+        // multer 按 latin1 给出文件名，中文要转回 UTF-8，向量库和文档表用同一个名字
+        const originalName=Buffer.from(file.originalname,'latin1').toString('utf8');
+
+        // 1.5 顺带把"第X条"式条文同步到法律条文库（失败不阻断向量入库，只记日志）
+        let articleCount=0;
+        try{
+            articleCount=await syncDocArticles(originalName,text);
+        }catch(articleError:any){
+            console.error('同步法律条文失败:',articleError.message);
+        }
+
+        // 2. 按条分块（没有“第X条”的文档按段落，不按固定字数）
+        const chunks=splitText(text, originalName);
 
         // 3. 批量向量化（一次请求算完所有块，比一块请求一次快得多）
         const vectors=await embedTexts(chunks);
@@ -61,25 +74,34 @@ router.post('/upload',upload.single('file'),async (req,res)=>{
         const records:ChunkRecord[]=chunks.map((chunk,index)=>({
             vector:vectors[index],     // 该块对应的向量
             text:chunk,                // 文本块
-            docName:file.originalname, // 所属文档名
+            docName:originalName, // 所属文档名
             chunkIndex:index           // 分块序号
         }));
 
         // 5. 写入向量库
         await addChunks(records);
-        //6.写入MySQL文档元数据表
-        await pool.query(
-            'INSERT INTO documents (filename,size,chunk_count) VALUES (?,?,?)',
-            [file.originalname,file.size,chunks.length]
-        )
+        //6.写入MySQL文档元数据表（带上传用户，供个人中心统计）
+        try {
+            await pool.query(
+                'INSERT INTO documents (filename,size,chunk_count,user_id) VALUES (?,?,?,?)',
+                [originalName, file.size, chunks.length, req.user?.userId ?? null]
+            )
+        } catch {
+            // 兼容尚未迁移 user_id 列的旧库
+            await pool.query(
+                'INSERT INTO documents (filename,size,chunk_count) VALUES (?,?,?)',
+                [originalName, file.size, chunks.length]
+            )
+        }
 
         // 返回处理结果
         res.json({
             success:true,
             data:{
-                filename:file.originalname,
+                filename:originalName,
                 size:file.size,
-                chunkCount:chunks.length
+                chunkCount:chunks.length,
+                articleCount
             }
         });
     }catch(error:any){
@@ -174,6 +196,12 @@ router.delete('/:id',async (req,res)=>{
         }
         //删除 MySQL 里的文档元数据
         await pool.query('DELETE FROM documents WHERE id=?',[id]);
+        //同步删除该文档提取到法律条文库的条目（失败只记日志，不阻断文档删除）
+        try{
+            await deleteDocArticles(filename);
+        }catch(articleError:any){
+            console.error('删除法律条文条目失败:',articleError.message);
+        }
         //删除成功，返回被删文档的 ID
         res.json({success:true,data:{id}});
     }catch(error:any){

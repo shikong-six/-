@@ -10,6 +10,9 @@ export interface LawCase {
   summary: string;
   verdict: string;
   lawRefs: string[];   // 相关法条（库里以 JSON 字符串存，读出时解析）
+  isPinned: boolean;   // 是否置顶（门户卡片角标 + 排序优先）
+  viewCount: number;   // 浏览数
+  createdAt: string;   // 入库日期 YYYY-MM-DD（列表统计行展示）
 }
 
 export interface LawArticle {
@@ -18,10 +21,17 @@ export interface LawArticle {
   title: string;
   source: string;
   content: string;
+  isPinned: boolean;
+  viewCount: number;
+  createdAt: string;
 }
 
+// 种子数据只有基础字段，置顶/浏览数入库时按规则生成
+type SeedCase = Omit<LawCase, 'isPinned' | 'viewCount' | 'createdAt'>;
+type SeedArticle = Omit<LawArticle, 'isPinned' | 'viewCount' | 'createdAt'>;
+
 // ===== 种子数据：法律案例（6 个分类 18 条）=====
-const seedCases: LawCase[] = [
+const seedCases: SeedCase[] = [
   // 婚姻家庭
   {id: 1, category: 'marriage', title: '离婚后物价上涨，一方请求增加子女抚养费获支持', summary: '夫妻双方协议离婚，约定孩子由母亲抚养，父亲每月支付抚养费 2000 元。三年后孩子进入初中，教育和生活支出明显增加，母亲起诉请求将抚养费增加至 3500 元。', verdict: '法院认为，原定抚养费已不足以维持当地实际生活水平，结合父亲收入情况，判决增加至每月 3200 元。', lawRefs: ['《民法典》第1085条', '最高法婚姻家庭编解释（一）第58条']},
   {id: 2, category: 'marriage', title: '婚前一方首付购房，婚后共同还贷的离婚分割', summary: '男方婚前首付购买房产并登记在自己名下，婚后夫妻共同还贷。离婚时女方主张分割房屋增值部分。', verdict: '法院判决房屋归男方所有，尚未归还的贷款为男方个人债务；男方需就婚后共同还贷部分及其增值向女方补偿。', lawRefs: ['《民法典》第1062条', '婚姻家庭编解释（一）第78条']},
@@ -71,10 +81,35 @@ const seedCases: LawCase[] = [
   {id: 34, category: 'criminal', title: '盗窃金额刚过起刑点，退赃获不起诉', summary: '嫌疑人初犯盗窃财物价值 1500 元，案发后全额退赃并取得谅解。', verdict: '检察机关综合考虑数额较小、初犯、退赃谅解等情节，作出相对不起诉决定。', lawRefs: ['《刑法》第264条', '《刑事诉讼法》第177条']},
   {id: 35, category: 'criminal', title: '主动投案如实供述，自首成立从轻处罚', summary: '嫌疑人作案后主动到派出所投案，如实供述全部犯罪事实。', verdict: '法院认定自首成立，依法从轻处罚，在法定刑以下判处并适用缓刑。', lawRefs: ['《刑法》第67条']},
   {id: 36, category: 'criminal', title: '未成年人犯罪记录依法封存', summary: '17 岁少年因抢劫被判缓刑，家属担心犯罪记录影响升学就业。', verdict: '法院依法对犯罪记录予以封存，除司法机关办案需要或有关单位根据国家规定查询外，不得向任何单位个人提供。', lawRefs: ['《刑事诉讼法》第286条']},
+  // ===== 第三批（再扩 24 条，合计 60）=====
+  {id: 37, category: 'marriage', title: '离婚时隐藏夫妻共同财产被少分', summary: '离婚诉讼中男方隐瞒名下理财产品约 80 万元，女方事后发现起诉重新分割。', verdict: '法院认定男方存在隐藏共同财产行为，在分割时对其少分，女方分得隐藏财产的 70%。', lawRefs: ['《民法典》第1092条']},
+  {id: 38, category: 'marriage', title: '探望权受阻，法院强制执行探视', summary: '离婚后直接抚养一方长期阻挠另一方探望子女，另一方申请强制执行。', verdict: '法院责令协助探望，逾期不履行可罚款、拘留；情节严重的依法追究法律责任。', lawRefs: ['《民法典》第1086条']},
+  {id: 39, category: 'marriage', title: '彩礼返还：未共同生活可酌情退还', summary: '双方订婚给付彩礼 18 万元后未办理结婚登记也未共同生活，男方请求返还。', verdict: '法院综合考虑当地习俗、给付方生活水平与过错情况，判决返还彩礼 12 万元。', lawRefs: ['最高法婚姻家庭编解释（一）第5条']},
+  {id: 40, category: 'marriage', title: '变更子女直接抚养关系获支持', summary: '原判子女随父生活，后父亲长期外出务工且疏于照料，母亲起诉变更抚养。', verdict: '法院认定随母生活更有利于子女成长，判决变更直接抚养关系，父亲支付抚养费。', lawRefs: ['《民法典》第1084条']},
+  {id: 41, category: 'traffic', title: '斑马线撞人，机动车方负主要责任', summary: '机动车未礼让行人，在斑马线撞伤正在过街的行人。', verdict: '法院认定机动车方未履行注意义务负主要责任，行人无明显过错，按 8:2 划分责任。', lawRefs: ['《道路交通安全法》第47条', '《道路交通安全法》第76条']},
+  {id: 42, category: 'traffic', title: '逃逸导致责任加重', summary: '肇事司机撞人后驾车逃离现场，后被公安机关查获。', verdict: '法院认定逃逸情节成立，在原责任基础上加重认定，并支持受害人精神损害抚慰金。', lawRefs: ['《道路交通安全法》第70条', '《民法典》第1179条']},
+  {id: 43, category: 'traffic', title: '非机动车逆行与机动车相撞的责任', summary: '电动车逆行与正常行驶机动车刮擦，双方均有损伤。', verdict: '法院认定非机动车逆行存在明显过错，适当减轻机动车一方责任，按 6:4 划分。', lawRefs: ['《道路交通安全法》第76条']},
+  {id: 44, category: 'traffic', title: '停车位内刮蹭，挪车方担责', summary: '车主倒车出库时刮蹭相邻已停妥车辆，对责任划分有争议。', verdict: '法院认定挪车方未尽观察义务负全部责任，应赔偿维修费用。', lawRefs: ['《民法典》第1165条']},
+  {id: 45, category: 'contract', title: '网购七天无理由退货被拒', summary: '消费者网购衣物七日内申请无理由退货，商家以"已拆封"拒绝。', verdict: '法院认定衣物不属于不适用无理由退货的商品，判决商家退款并承担运费。', lawRefs: ['《消费者权益保护法》第25条']},
+  {id: 46, category: 'contract', title: '预付卡商家跑路，消费者索赔', summary: '健身房收取年卡费用后突然关门，会员要求退还剩余费用。', verdict: '法院认定商家构成根本违约，判决退还未消费部分并支付相应利息。', lawRefs: ['《民法典》第563条', '《消费者权益保护法》第53条']},
+  {id: 47, category: 'contract', title: '中介隐瞒凶宅信息被判赔偿', summary: '购房者入住后得知房屋曾发生非正常死亡，中介缔约时未如实告知。', verdict: '法院认定中介未尽如实报告义务，判决退还中介费并赔偿部分房屋差价损失。', lawRefs: ['《民法典》第962条']},
+  {id: 48, category: 'contract', title: '分期付款逾期，卖方主张解除', summary: '买方购买设备约定分期付款，连续两期未付，卖方要求解除合同并取回设备。', verdict: '法院认定逾期达到法定解除条件，判决解除合同，买方支付使用费后返还设备。', lawRefs: ['《民法典》第634条']},
+  {id: 49, category: 'labor', title: '竞业限制补偿未付，协议不生效', summary: '公司与离职员工签订竞业限制协议但未支付经济补偿，员工入职竞品后被诉违约。', verdict: '法院认定公司未依约支付补偿，员工有权解除竞业限制义务，驳回违约金请求。', lawRefs: ['《劳动合同法》第23条', '最高法劳动争议解释（一）第36条']},
+  {id: 50, category: 'labor', title: '工伤认定后公司拒付停工留薪期工资', summary: '员工工伤住院期间公司停发工资，员工主张停工留薪期待遇。', verdict: '法院判决公司按原工资福利待遇支付停工留薪期工资，并补缴相应社保。', lawRefs: ['《工伤保险条例》第33条']},
+  {id: 51, category: 'labor', title: '女职工三期被辞退获赔偿', summary: '女职工怀孕期间公司以"岗位撤销"为由解除劳动合同。', verdict: '法院认定违法解除，判决支付赔偿金，并支持孕期、产期、哺乳期工资差额。', lawRefs: ['《劳动合同法》第42条', '《女职工劳动保护特别规定》第5条']},
+  {id: 52, category: 'labor', title: '劳务关系与劳动关系的认定', summary: '公司主张与退休返聘人员仅为劳务关系，拒付加班费和经济补偿。', verdict: '法院结合管理从属性、考勤制度认定构成劳动关系，支持加班费请求。', lawRefs: ['《劳动合同法》第7条']},
+  {id: 53, category: 'property', title: '开发商逾期交房违约金争议', summary: '商品房逾期交房八个月，购房者主张按合同约定日万分之三支付违约金。', verdict: '法院认定违约成立，酌情按约定标准支持违约金，开发商主张调低未获全部支持。', lawRefs: ['《民法典》第585条', '《商品房买卖合同解释》第13条']},
+  {id: 54, category: 'property', title: '相邻采光权受侵害获补偿', summary: '相邻新建建筑遮挡采光，底层业主起诉要求拆除或赔偿。', verdict: '法院认定构成妨碍相邻关系，判决给予适当补偿并责令整改遮光部分。', lawRefs: ['《民法典》第293条']},
+  {id: 55, category: 'property', title: '车位买卖合同效力与交付争议', summary: '购房者购买地下车位并付款，开发商迟迟未交付且另行出售。', verdict: '法院判决继续履行或返还购车位款并赔偿损失，开发商不得一物二卖。', lawRefs: ['《民法典》第577条', '《民法典》第580条']},
+  {id: 56, category: 'property', title: '装修污染致健康损害索赔', summary: '业主入住后检测甲醛超标，起诉装修公司赔偿医疗费和检测费。', verdict: '法院结合检测报告与就医记录认定因果关系，判决装修公司承担相应赔偿责任。', lawRefs: ['《民法典》第1165条', '《民法典》第1179条']},
+  {id: 57, category: 'criminal', title: '诈骗罪数额认定与退赔从宽', summary: '被告人虚构投资项目骗取多人共计 45 万元，案发后积极退赔并取得谅解。', verdict: '法院认定构成诈骗罪，综合退赔谅解情节从轻处罚并适用缓刑。', lawRefs: ['《刑法》第266条']},
+  {id: 58, category: 'criminal', title: '妨害公务罪与正当维权的界限', summary: '执法人员依法检查时，当事人推搡阻拦并造成轻微伤，被控妨害公务。', verdict: '法院认定行为超出合理维权范围，构成妨害公务罪，但情节较轻予以从轻处罚。', lawRefs: ['《刑法》第277条']},
+  {id: 59, category: 'criminal', title: '信用卡诈骗：恶意透支的认定', summary: '持卡人透支后经两次有效催收超过三个月仍未归还，被控信用卡诈骗。', verdict: '法院认定属于恶意透支型信用卡诈骗，综合归还情况和认罪态度判处缓刑。', lawRefs: ['《刑法》第196条']},
+  {id: 60, category: 'criminal', title: '敲诈勒索与民事纠纷的区分', summary: '当事人以曝光隐私相威胁索要补偿款，对方报警后被刑事立案。', verdict: '法院认定以非法占有为目的、采用威胁手段，构成敲诈勒索罪，判处有期徒刑并处罚金。', lawRefs: ['《刑法》第274条']},
 ];
 
-// ===== 种子数据：法律条文（6 个模块 21 条，常用法条精简摘录，非官方文本）=====
-const seedArticles: LawArticle[] = [
+// ===== 种子数据：法律条文（常用法条精简摘录，非官方文本）=====
+const seedArticles: SeedArticle[] = [
   // 婚姻家庭
   {id: 1, category: 'marriage', title: '诉讼离婚的准予条件', source: '《民法典》第1079条', content: '人民法院审理离婚案件，应当进行调解；如果感情确已破裂，调解无效的，应当准予离婚。重婚或与他人同居、实施家庭暴力、赌博吸毒屡教不改、因感情不和分居满二年等情形，调解无效的，应当准予离婚。'},
   {id: 2, category: 'marriage', title: '离婚后子女抚养费的负担', source: '《民法典》第1085条', content: '离婚后，子女由一方直接抚养的，另一方应当负担部分或者全部抚养费。费用的多少和期限的长短，由双方协议；协议不成的，由人民法院判决。子女在必要时有权向父母任何一方提出超过协议或判决原定数额的合理要求。'},
@@ -100,9 +135,67 @@ const seedArticles: LawArticle[] = [
   {id: 18, category: 'property', title: '业主支付物业费的义务', source: '《民法典》第944条', content: '业主应当按照约定向物业服务人支付物业费。物业服务人已经按照约定和有关规定提供服务的，业主不得以未接受或者无需接受相关物业服务为由拒绝支付物业费。业主逾期不支付的，物业服务人可以催告其在合理期限内支付，也可以依法提起诉讼或申请仲裁。'},
   // 刑事辩护
   {id: 19, category: 'criminal', title: '正当防卫', source: '《刑法》第20条', content: '为使国家、公共利益、本人或者他人的人身、财产和其他权利免受正在进行的不法侵害，而采取的制止不法侵害的行为，对不法侵害人造成损害的，属于正当防卫，不负刑事责任。正当防卫明显超过必要限度造成重大损害的，应当负刑事责任，但是应当减轻或者免除处罚。'},
-  {id: 20, category: 'criminal', title: '危险驾驶罪', source: '《刑法》第133条之一', content: '在道路上驾驶机动车，追逐竞驶情节恶劣的，醉酒驾驶机动车的，从事校车业务或者旅客运输严重超过额定乘员载客或严重超过规定时速行驶的，以及违反危险化学品安全管理规定运输危险化学品危及公共安全的，处拘役，并处罚金。'},
+  {id: 20, category: 'criminal', title: '危险驾驶罪', source: '《刑法》第133条之一', content: '在道路上驾驶机动车，有追逐竞驶情节恶劣、醉酒驾驶机动车、从事校车业务或者旅客运输严重超过额定乘员载客、严重超过规定时速行驶，或者违反危险化学品安全管理规定运输危险化学品危及公共安全等情形的，构成危险驾驶罪，处拘役，并处罚金。单纯醉酒驾驶、尚未造成重大事故的，法定刑是拘役并处罚金，不是有期徒刑。'},
   {id: 21, category: 'criminal', title: '帮助信息网络犯罪活动罪', source: '《刑法》第287条之二', content: '明知他人利用信息网络实施犯罪，为其犯罪提供互联网接入、服务器托管、网络存储、通讯传输等技术支持，或者提供广告推广、支付结算等帮助，情节严重的，处三年以下有期徒刑或者拘役，并处或者单处罚金。'},
+  // ===== 第二批扩充 =====
+  {id: 22, category: 'marriage', title: '夫妻共同财产的范围', source: '《民法典》第1062条', content: '夫妻在婚姻关系存续期间所得的工资、奖金、劳务报酬，生产、经营、投资的收益，知识产权的收益，继承或者受赠的财产（除非遗嘱或赠与合同确定只归一方）以及其他应当归共同所有的财产，为夫妻的共同财产，归夫妻共同所有。'},
+  {id: 23, category: 'marriage', title: '离婚时隐藏共同财产的法律后果', source: '《民法典》第1092条', content: '夫妻一方隐藏、转移、变卖、毁损、挥霍夫妻共同财产，或者伪造夫妻共同债务企图侵占另一方财产的，在离婚分割夫妻共同财产时，对该方可以少分或者不分。离婚后，另一方发现有上述行为的，可以向人民法院提起诉讼，请求再次分割夫妻共同财产。'},
+  {id: 24, category: 'marriage', title: '子女探望权', source: '《民法典》第1086条', content: '离婚后，不直接抚养子女的父或者母，有探望子女的权利，另一方有协助的义务。行使探望权利的方式、时间由当事人协议；协议不成的，由人民法院判决。父或者母探望子女，不利于子女身心健康的，人民法院依法中止探望；中止的事由消失后，应当恢复探望。'},
+  {id: 25, category: 'marriage', title: '父母对子女的抚养义务', source: '《民法典》第1058条', content: '夫妻双方平等享有对未成年子女抚养、教育和保护的权利，共同承担对未成年子女抚养、教育和保护的义务。'},
+  {id: 26, category: 'traffic', title: '机动车礼让行人', source: '《道路交通安全法》第47条', content: '机动车行经人行横道时，应当减速行驶；遇行人正在通过人行横道，应当停车让行。机动车行经没有交通信号的道路时，遇行人横过道路，应当避让。'},
+  {id: 27, category: 'traffic', title: '事故现场保护与报警', source: '《道路交通安全法》第70条', content: '在道路上发生交通事故，车辆驾驶人应当立即停车，保护现场；造成人身伤亡的，车辆驾驶人应当立即抢救受伤人员，并迅速报告执勤的交通警察或者公安机关交通管理部门。'},
+  {id: 28, category: 'traffic', title: '精神损害赔偿', source: '《民法典》第1183条', content: '侵害自然人人身权益造成严重精神损害的，被侵权人有权请求精神损害赔偿。因故意或者重大过失侵害自然人具有人身意义的特定物造成严重精神损害的，被侵权人有权请求精神损害赔偿。'},
+  {id: 29, category: 'contract', title: '合同解除的法定情形', source: '《民法典》第563条', content: '有下列情形之一的，当事人可以解除合同：因不可抗力致使不能实现合同目的；在履行期限届满前，当事人一方明确表示或者以自己的行为表明不履行主要债务；当事人一方迟延履行主要债务，经催告后在合理期限内仍未履行；当事人一方迟延履行债务或者有其他违约行为致使不能实现合同目的；法律规定的其他情形。'},
+  {id: 30, category: 'contract', title: '定金罚则', source: '《民法典》第587条', content: '债务人履行债务的，定金应当抵作价款或者收回。给付定金的一方不履行债务或者履行债务不符合约定，致使不能实现合同目的的，无权请求返还定金；收受定金的一方不履行债务或者履行债务不符合约定，致使不能实现合同目的的，应当双倍返还定金。'},
+  {id: 31, category: 'contract', title: '七天无理由退货', source: '《消费者权益保护法》第25条', content: '经营者采用网络、电视、电话、邮购等方式销售商品，消费者有权自收到商品之日起七日内退货，且无需说明理由，但下列商品除外：消费者定作的；鲜活易腐的；在线下载或者消费者拆封的音像制品、计算机软件等数字化商品；交付的报纸、期刊以及其他根据商品性质并经消费者在购买时确认不宜退货的商品。'},
+  {id: 32, category: 'contract', title: '中介如实报告义务', source: '《民法典》第962条', content: '中介人应当就有关订立合同的事项向委托人如实报告。中介人故意隐瞒与订立合同有关的重要事实或者提供虚假情况，损害委托人利益的，不得请求支付报酬并应当承担赔偿责任。'},
+  {id: 33, category: 'labor', title: '试用期最长期限', source: '《劳动合同法》第19条', content: '劳动合同期限三个月以上不满一年的，试用期不得超过一个月；一年以上不满三年的，试用期不得超过二个月；三年以上固定期限和无固定期限的劳动合同，试用期不得超过六个月。同一用人单位与同一劳动者只能约定一次试用期。'},
+  {id: 34, category: 'labor', title: '竞业限制', source: '《劳动合同法》第23条', content: '用人单位与劳动者可以在劳动合同中约定保守用人单位的商业秘密和与知识产权相关的保密事项。对负有保密义务的劳动者，用人单位可以在劳动合同或者保密协议中与劳动者约定竞业限制条款，并约定在解除或者终止劳动合同后，在竞业限制期限内按月给予劳动者经济补偿。'},
+  {id: 35, category: 'labor', title: '不得解除劳动合同的情形', source: '《劳动合同法》第42条', content: '劳动者有下列情形之一的，用人单位不得依照本法第四十条、第四十一条的规定解除劳动合同：从事接触职业病危害作业的劳动者未进行离岗前职业健康检查，或者疑似职业病病人在诊断或者医学观察期间的；在本单位患职业病或者因工负伤并被确认丧失或者部分丧失劳动能力的；患病或者非因工负伤，在规定的医疗期内的；女职工在孕期、产期、哺乳期的；在本单位连续工作满十五年，且距法定退休年龄不足五年的；法律、行政法规规定的其他情形。'},
+  {id: 36, category: 'labor', title: '停工留薪期待遇', source: '《工伤保险条例》第33条', content: '职工因工作遭受事故伤害或者患职业病需要暂停工作接受工伤医疗的，在停工留薪期内，原工资福利待遇不变，由所在单位按月支付。停工留薪期一般不超过12个月。伤情严重或者情况特殊，经设区的市级劳动能力鉴定委员会确认，可以适当延长，但延长不得超过12个月。'},
+  {id: 37, category: 'property', title: '不动产登记效力', source: '《民法典》第209条', content: '不动产物权的设立、变更、转让和消灭，经依法登记，发生效力；未经登记，不发生效力，但是法律另有规定的除外。依法属于国家所有的自然资源，所有权可以不登记。'},
+  {id: 38, category: 'property', title: '承租人转租须经同意', source: '《民法典》第716条', content: '承租人经出租人同意，可以将租赁物转租给第三人。承租人转租的，承租人与出租人之间的租赁合同继续有效；第三人造成租赁物损失的，承租人应当赔偿损失。承租人未经出租人同意转租的，出租人可以解除合同。'},
+  {id: 39, category: 'property', title: '相邻采光通风', source: '《民法典》第293条', content: '建造建筑物，不得违反国家有关工程建设标准，不得妨碍相邻建筑物的通风、采光和日照。'},
+  {id: 40, category: 'property', title: '物业服务合同的效力', source: '《民法典》第939条', content: '建设单位依法与物业服务人订立的前期物业服务合同，以及业主委员会与业主大会依法选聘的物业服务人订立的物业服务合同，对业主具有法律约束力。'},
+  {id: 41, category: 'criminal', title: '自首', source: '《刑法》第67条', content: '犯罪以后自动投案，如实供述自己的罪行的，是自首。对于自首的犯罪分子，可以从轻或者减轻处罚。其中，犯罪较轻的，可以免除处罚。被采取强制措施的犯罪嫌疑人、被告人和正在服刑的罪犯，如实供述司法机关还未掌握的本人其他罪行的，以自首论。'},
+  {id: 42, category: 'criminal', title: '盗窃罪', source: '《刑法》第264条', content: '盗窃公私财物，数额较大的，或者多次盗窃、入户盗窃、携带凶器盗窃、扒窃的，处三年以下有期徒刑、拘役或者管制，并处或者单处罚金；数额巨大或者有其他严重情节的，处三年以上十年以下有期徒刑，并处罚金；数额特别巨大或者有其他特别严重情节的，处十年以上有期徒刑或者无期徒刑，并处罚金或者没收财产。'},
+  {id: 43, category: 'criminal', title: '诈骗罪', source: '《刑法》第266条', content: '诈骗公私财物，数额较大的，处三年以下有期徒刑、拘役或者管制，并处或者单处罚金；数额巨大或者有其他严重情节的，处三年以上十年以下有期徒刑，并处罚金；数额特别巨大或者有其他特别严重情节的，处十年以上有期徒刑或者无期徒刑，并处罚金或者没收财产。本法另有规定的，依照规定。'},
+  {id: 44, category: 'criminal', title: '信用卡诈骗罪', source: '《刑法》第196条', content: '有下列情形之一，进行信用卡诈骗活动，数额较大的，处五年以下有期徒刑或者拘役，并处二万元以上二十万元以下罚金：使用伪造的信用卡，或者使用以虚假的身份证明骗领的信用卡的；使用作废的信用卡的；冒用他人信用卡的；恶意透支的。'},
+  {id: 45, category: 'other', title: '诉讼时效期间', source: '《民法典》第188条', content: '向人民法院请求保护民事权利的诉讼时效期间为三年。法律另有规定的，依照其规定。诉讼时效期间自权利人知道或者应当知道权利受到损害以及义务人之日起计算。法律另有规定的，依照其规定。但是自权利受到损害之日起超过二十年的，人民法院不予保护；有特殊情况的，人民法院可以根据权利人的申请决定延长。'},
+  {id: 46, category: 'traffic', title: '交通肇事罪的量刑', source: '《刑法》第133条', content: '违反交通运输管理法规，因而发生重大事故，致人重伤、死亡或者使公私财产遭受重大损失的，处三年以下有期徒刑或者拘役；交通运输肇事后逃逸或者有其他特别恶劣情节的，处三年以上七年以下有期徒刑；因逃逸致人死亡的，处七年以上有期徒刑。醉酒驾驶并造成上述重大事故的，不能只按危险驾驶罪的拘役处理，要同时看是否构成交通肇事罪及对应的有期徒刑档次。'},
+  {id: 47, category: 'criminal', title: '醉酒驾驶的刑罚', source: '《刑法》第133条之一、第133条', content: '在道路上醉酒驾驶机动车，构成危险驾驶罪的，处拘役，并处罚金。这是尚未造成重大事故时的法定刑。若醉驾导致重大事故，致人重伤、死亡或者公私财产重大损失，可能构成交通肇事罪：处三年以下有期徒刑或者拘役；肇事后逃逸或者有其他特别恶劣情节的，处三年以上七年以下有期徒刑；因逃逸致人死亡的，处七年以上有期徒刑。'},
 ];
+
+// ===== 老库补列：MySQL 不支持 ADD COLUMN IF NOT EXISTS，先查 information_schema 再 ALTER =====
+// 列已存在返回 false；缺失则 ALTER 补上并返回 true（供调用方决定是否回填老数据）
+async function ensureColumn(table: 'law_cases' | 'law_articles', column: 'is_pinned' | 'view_count', ddl: string): Promise<boolean> {
+  const [rows] = await pool.query<any[]>(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [table, column]
+  );
+  if (rows.length > 0) return false;
+  await pool.query(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  console.log(`${table} 表已补充 ${column} 列`);
+  return true;
+}
+
+// 列补齐后的老数据回填：每个分类首条置顶，浏览数按 id 生成确定性演示值
+async function backfillPortalFields(table: 'law_cases' | 'law_articles'): Promise<void> {
+  await pool.query(`UPDATE ${table} SET view_count = 100 + (id * 37) % 420 WHERE view_count = 0`);
+  await pool.query(
+    `UPDATE ${table} t
+     JOIN (SELECT category, MIN(id) AS mid FROM ${table} GROUP BY category) firsts
+       ON firsts.category = t.category AND firsts.mid = t.id
+     SET t.is_pinned = 1`
+  );
+  console.log(`${table} 老数据已回填置顶/浏览数`);
+}
+
+// 种子数据的确定性浏览数（100~519，按 id 分散，重复灌入结果一致）
+function seedViewCount(id: number): number {
+  return 100 + (id * 37) % 420;
+}
 
 // ===== 建表 + 空库灌种子数据（幂等：可重复执行）=====
 async function initContentTables(): Promise<void> {
@@ -115,6 +208,8 @@ async function initContentTables(): Promise<void> {
       summary TEXT COMMENT '案情摘要',
       verdict TEXT COMMENT '裁判要旨',
       law_refs VARCHAR(500) COMMENT '相关法条（JSON 数组字符串）',
+      is_pinned TINYINT NOT NULL DEFAULT 0 COMMENT '是否置顶：1置顶 0普通',
+      view_count INT NOT NULL DEFAULT 0 COMMENT '浏览数',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
       INDEX idx_category (category)
     ) COMMENT='法律案例库'
@@ -127,31 +222,54 @@ async function initContentTables(): Promise<void> {
       title VARCHAR(255) NOT NULL COMMENT '条文要点名',
       source VARCHAR(128) COMMENT '出处（法律+条号）',
       content TEXT COMMENT '条文内容（精简摘录）',
+      is_pinned TINYINT NOT NULL DEFAULT 0 COMMENT '是否置顶：1置顶 0普通',
+      view_count INT NOT NULL DEFAULT 0 COMMENT '浏览数',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
       INDEX idx_category (category)
     ) COMMENT='法律条文库'
   `);
+  // ===== 老库自动补列 + 老数据回填（列是本次新增的才回填，避免覆盖真实浏览数）=====
+  const casePinnedAdded = await ensureColumn('law_cases', 'is_pinned', `is_pinned TINYINT NOT NULL DEFAULT 0 COMMENT '是否置顶：1置顶 0普通'`);
+  const caseViewAdded = await ensureColumn('law_cases', 'view_count', `view_count INT NOT NULL DEFAULT 0 COMMENT '浏览数'`);
+  const articlePinnedAdded = await ensureColumn('law_articles', 'is_pinned', `is_pinned TINYINT NOT NULL DEFAULT 0 COMMENT '是否置顶：1置顶 0普通'`);
+  const articleViewAdded = await ensureColumn('law_articles', 'view_count', `view_count INT NOT NULL DEFAULT 0 COMMENT '浏览数'`);
+  if (casePinnedAdded || caseViewAdded) {
+    await backfillPortalFields('law_cases');
+  }
+  if (articlePinnedAdded || articleViewAdded) {
+    await backfillPortalFields('law_articles');
+  }
+
   // 幂等灌入：INSERT IGNORE 按主键去重，老库可增量补新数据、重复执行不报错
+  // 置顶规则：每个分类第一条置顶；浏览数取确定性的演示值
   let caseSeeded = 0;
+  const seenCaseCategory = new Set<string>();
   for (const item of seedCases) {
+    const pinned = seenCaseCategory.has(item.category) ? 0 : 1;
+    seenCaseCategory.add(item.category);
     const [result] = await pool.query<any>(
-      'INSERT IGNORE INTO law_cases (id, category, title, summary, verdict, law_refs) VALUES (?,?,?,?,?,?)',
-      [item.id, item.category, item.title, item.summary, item.verdict, JSON.stringify(item.lawRefs)]
+      'INSERT IGNORE INTO law_cases (id, category, title, summary, verdict, law_refs, is_pinned, view_count) VALUES (?,?,?,?,?,?,?,?)',
+      [item.id, item.category, item.title, item.summary, item.verdict, JSON.stringify(item.lawRefs), pinned, seedViewCount(item.id)]
     );
     caseSeeded += result.affectedRows;
   }
   if (caseSeeded > 0) {
     console.log(`法律案例种子数据新增：${caseSeeded} 条（总计 ${seedCases.length} 条）`);
   }
-  const [articleRows] = await pool.query<any[]>('SELECT COUNT(*) AS total FROM law_articles');
-  if (articleRows[0].total === 0) {
-    for (const item of seedArticles) {
-      await pool.query(
-        'INSERT INTO law_articles (id, category, title, source, content) VALUES (?,?,?,?,?)',
-        [item.id, item.category, item.title, item.source, item.content]
-      );
-    }
-    console.log(`法律条文种子数据已写入：${seedArticles.length} 条`);
+  // 法条同样用 INSERT IGNORE 做增量灌入（老库可补新条文）
+  let articleSeeded = 0;
+  const seenArticleCategory = new Set<string>();
+  for (const item of seedArticles) {
+    const pinned = seenArticleCategory.has(item.category) ? 0 : 1;
+    seenArticleCategory.add(item.category);
+    const [result] = await pool.query<any>(
+      'INSERT IGNORE INTO law_articles (id, category, title, source, content, is_pinned, view_count) VALUES (?,?,?,?,?,?,?)',
+      [item.id, item.category, item.title, item.source, item.content, pinned, seedViewCount(item.id)]
+    );
+    articleSeeded += result.affectedRows;
+  }
+  if (articleSeeded > 0) {
+    console.log(`法律条文种子数据新增：${articleSeeded} 条（总计 ${seedArticles.length} 条）`);
   }
 }
 
@@ -159,9 +277,47 @@ async function initContentTables(): Promise<void> {
 initContentTables().catch((err: any) => console.error('初始化内容库表失败:', err.message));
 
 // ===== 查询（路由层调用）=====
-// 查全部案例，law_refs 从 JSON 字符串解析回数组
-export async function listCases(): Promise<LawCase[]> {
-  const [rows] = await pool.query<any[]>('SELECT * FROM law_cases ORDER BY id');
+// 列表筛选参数：分类 + 关键词 + 排序（门户页/列表页共用）
+export interface ContentQuery {
+  category?: string;   // 分类路由段，空 = 全部
+  keyword?: string;    // 模糊匹配标题/摘要（法条：标题/出处/内容）
+  sort?: 'new' | 'hot';// new=最新入库在前 hot=浏览数高在前（置顶始终优先）
+}
+
+// TIMESTAMP 转 YYYY-MM-DD（mysql2 返回 Date 或字符串都兼容）
+function formatDate(value: any): string {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (isNaN(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// 组装 WHERE / ORDER：置顶优先，其次按排序参数，最后按 id 稳定次序
+function buildContentSql(query: ContentQuery, likeFields: string[]): {whereSql: string; orderSql: string; params: any[]} {
+  const where: string[] = [];
+  const params: any[] = [];
+  if (query.category) {
+    where.push('category = ?');
+    params.push(query.category);
+  }
+  if (query.keyword) {
+    const kw = `%${query.keyword}%`;
+    where.push(`(${likeFields.map((f) => `${f} LIKE ?`).join(' OR ')})`);
+    likeFields.forEach(() => params.push(kw));
+  }
+  const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
+  const orderField = query.sort === 'hot' ? 'view_count DESC' : query.sort === 'new' ? 'created_at DESC' : 'id';
+  const orderSql = ` ORDER BY is_pinned DESC, ${orderField}, id`;
+  return {whereSql, orderSql, params};
+}
+
+// 查案例列表（支持分类/关键词/排序），law_refs 从 JSON 字符串解析回数组
+export async function listCases(query: ContentQuery = {}): Promise<LawCase[]> {
+  const {whereSql, orderSql, params} = buildContentSql(query, ['title', 'summary', 'verdict']);
+  const [rows] = await pool.query<any[]>(`SELECT * FROM law_cases${whereSql}${orderSql}`, params);
   return rows.map((row) => ({
     id: row.id,
     category: row.category,
@@ -169,17 +325,116 @@ export async function listCases(): Promise<LawCase[]> {
     summary: row.summary ?? '',
     verdict: row.verdict ?? '',
     lawRefs: row.law_refs ? JSON.parse(row.law_refs) : [],
+    isPinned: !!row.is_pinned,
+    viewCount: row.view_count ?? 0,
+    createdAt: formatDate(row.created_at),
   }));
 }
 
-// 查全部法条
-export async function listArticles(): Promise<LawArticle[]> {
-  const [rows] = await pool.query<any[]>('SELECT * FROM law_articles ORDER BY id');
+// 查法条列表（支持分类/关键词/排序）
+export async function listArticles(query: ContentQuery = {}): Promise<LawArticle[]> {
+  const {whereSql, orderSql, params} = buildContentSql(query, ['title', 'source', 'content']);
+  const [rows] = await pool.query<any[]>(`SELECT * FROM law_articles${whereSql}${orderSql}`, params);
   return rows.map((row) => ({
     id: row.id,
     category: row.category,
     title: row.title,
     source: row.source ?? '',
     content: row.content ?? '',
+    isPinned: !!row.is_pinned,
+    viewCount: row.view_count ?? 0,
+    createdAt: formatDate(row.created_at),
   }));
+}
+
+// 按 ID 查单条案例（详情页用）；不存在返回 null
+export async function getCaseById(id: number): Promise<LawCase | null> {
+  const [rows] = await pool.query<any[]>('SELECT * FROM law_cases WHERE id = ? LIMIT 1', [id]);
+  if (!rows.length) return null;
+  const row = rows[0];
+  return {
+    id: row.id,
+    category: row.category,
+    title: row.title,
+    summary: row.summary ?? '',
+    verdict: row.verdict ?? '',
+    lawRefs: row.law_refs ? JSON.parse(row.law_refs) : [],
+    isPinned: !!row.is_pinned,
+    viewCount: row.view_count ?? 0,
+    createdAt: formatDate(row.created_at),
+  };
+}
+
+// 浏览数 +1（用户打开案例/法条详情时由前端调用）
+export async function incrementCaseView(id: number, userId?: number): Promise<void> {
+  await pool.query('UPDATE law_cases SET view_count = view_count + 1 WHERE id = ?', [id]);
+  // 个人中心「浏览案例」统计：按用户去重记录（同一用户重复打开同一案例只计一次）
+  if (userId) {
+    try {
+      await pool.query(
+        'INSERT IGNORE INTO user_case_views (user_id, case_id) VALUES (?, ?)',
+        [userId, id]
+      );
+    } catch {
+      /* 表未就绪时不影响浏览数自增 */
+    }
+  }
+}
+
+export async function incrementArticleView(id: number): Promise<void> {
+  await pool.query('UPDATE law_articles SET view_count = view_count + 1 WHERE id = ?', [id]);
+}
+
+// ===== 上传文档 → 法律条文库同步 =====
+// 法律法规的标准条文结构"第X条"（支持中文数字和阿拉伯数字，容忍条号内空格）
+const ARTICLE_PATTERN = /(第\s*(?:[一二三四五六七八九十百千零]+|\d+)\s*条)/;
+
+// 从文档纯文本提取"第X条"式条文：返回条号 + 条文内容
+export function extractDocArticles(text: string): Array<{ num: string; content: string }> {
+  // split 带捕获组：parts = [前言, '第X条', 内容, '第Y条', 内容, ...]
+  const parts = text.split(ARTICLE_PATTERN);
+  const articles: Array<{ num: string; content: string }> = [];
+  for (let i = 1; i + 1 < parts.length; i += 2) {
+    const num = parts[i].replace(/\s+/g, '');
+    const content = (parts[i + 1] || '').trim();
+    // 内容太短的多是页眉页脚/目录残片，跳过
+    if (content.length < 8) continue;
+    articles.push({num, content});
+    if (articles.length >= 300) break;  // 防御超长文档
+  }
+  return articles;
+}
+
+// 文档名去扩展名，作为条文出处的"书名"（劳动合同法.pdf → 劳动合同法）
+function docBaseName(docName: string): string {
+  return docName.replace(/\.[^.]+$/, '');
+}
+
+// LIKE 模式转义（% _ 和转义符本身）
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (m) => '\\' + m);
+}
+
+// 删除某文档同步到法律条文库的条目（文档从知识库删除时配套调用，重复上传前也先清）
+export async function deleteDocArticles(docName: string): Promise<void> {
+  const pattern = `《${escapeLike(docBaseName(docName))}》%`;
+  await pool.query("DELETE FROM law_articles WHERE source LIKE ? ESCAPE '\\\\'", [pattern]);
+}
+
+// 上传法律文档后调用：提取"第X条"式条文写入法律条文库（分类：其他），返回写入条数
+// 先删该文档已同步的旧条目再写入：重复上传/更新同一文档不产生重复
+export async function syncDocArticles(docName: string, text: string): Promise<number> {
+  const articles = extractDocArticles(text);
+  const base = docBaseName(docName);
+  await deleteDocArticles(docName);
+  for (const item of articles) {
+    await pool.query(
+      'INSERT INTO law_articles (category, title, source, content) VALUES (?,?,?,?)',
+      ['other', item.num, `《${base}》${item.num}`, item.content]
+    );
+  }
+  if (articles.length > 0) {
+    console.log(`《${base}》已同步法律条文 ${articles.length} 条（分类：其他）`);
+  }
+  return articles.length;
 }

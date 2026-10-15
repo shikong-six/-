@@ -41,6 +41,16 @@ async function getTable(records?:ChunkRecord[]):Promise<lancedb.Table|null>{
     return await db.createTable(TABLE_NAME,records);
 }
 
+// 换向量模型时整表删掉。新旧向量维度不同，留在一张表里检索会对不上。
+export async function resetVectorTable(): Promise<void> {
+  const db = await lancedb.connect(DB_PATH);
+  const names = await db.tableNames();
+  if (names.includes(TABLE_NAME)) {
+    await db.dropTable(TABLE_NAME);
+  }
+  invalidateChunkTextCache();
+}
+
 //把文档分块批量写入向量库
 export async function addChunks(records:ChunkRecord[]):Promise<void>{
     //没有数据直接返回
@@ -51,7 +61,41 @@ export async function addChunks(records:ChunkRecord[]):Promise<void>{
     if(table){
         //把记录追加到表里
         await table.add(records);
+        invalidateChunkTextCache();
     }
+}
+
+// 全文扫描用的轻量记录（不含向量）
+export type ChunkText={
+    text:string;
+    docName:string;
+    chunkIndex:number;
+}
+
+// 知识库不大，扫描结果缓存一分钟，上传或删除文档时清掉
+let chunkTextCache:{at:number;rows:ChunkText[]}|null=null;
+
+export function invalidateChunkTextCache():void{
+    chunkTextCache=null;
+}
+
+// 取出库里全部文本块，供关键词那一路召回使用
+export async function listChunkTexts():Promise<ChunkText[]>{
+    if(chunkTextCache&&Date.now()-chunkTextCache.at<60_000){
+        return chunkTextCache.rows;
+    }
+    const table=await getTable();
+    if(!table){
+        return [];
+    }
+    const rows=await table.query().select(['text','docName','chunkIndex']).limit(5000).toArray();
+    const mapped:ChunkText[]=rows.map((r:any)=>({
+        text:String(r.text??''),
+        docName:String(r.docName??''),
+        chunkIndex:Number(r.chunkIndex??0),
+    }));
+    chunkTextCache={at:Date.now(),rows:mapped};
+    return mapped;
 }
 
 //相似度检索:返回与查询向量相近的topk个文本块
@@ -72,6 +116,18 @@ export async function searchChunks(queryVector:number[],topk:number=3):Promise<S
     }));
 }
 
+// ===== 检索相关性门槛 =====
+// 库中向量与查询向量均已归一化（模长 1），L2 距离换算余弦相似度：cos = 1 - d²/2
+// 低于下限视为"与知识库无关"：问答流程丢弃该分块，走"未检索到资料"分支
+// 注意：这是兜底防线（只拦完全无关的输入）。库较小时闲聊类问题相似度可能仍偏高，
+// 由 chat 路由 system prompt 的"资料与问题无关时直接说明"规则兜底
+export const RELEVANCE_FLOOR = 0.45;
+
+// 判断检索分块是否与问题相关（score 为 LanceDB 的 L2 距离，越小越相似）
+export function chunkRelevant(score: number): boolean {
+    return 1 - (score * score) / 2 >= RELEVANCE_FLOOR;
+}
+
 //按文档名删除向量库里该文档的所有分块（知识库文档删除时配套调用）
 export async function deleteChunksByDocName(docName:string):Promise<void>{
     //拿到向量表，一张表都没建过就不用删
@@ -84,5 +140,6 @@ export async function deleteChunksByDocName(docName:string):Promise<void>{
     const escaped=docName.replace(/'/g,"''");
     //执行删除：删掉所有 docName 等于该文档名的记录
     await table.delete(`docName = '${escaped}'`);
+    invalidateChunkTextCache();
 }
     

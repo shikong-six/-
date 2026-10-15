@@ -21,9 +21,12 @@
       <!-- 检索结果列表 -->
       <div v-if="searchResults.length > 0" class="search-results">
         <div v-for="(item, index) in searchResults" :key="index" class="search-result-item">
-          <!-- 结果元信息：文档名 + 相似度 -->
+          <!-- 结果元信息：法律名 + 相似度 -->
           <div class="result-meta">
-            <span class="result-doc">{{ item.docName }}（第 {{ item.chunkIndex + 1 }} 块）</span>
+            <!-- 展示名和库里的文件名分开：docName 是存储键（含 _20121228 和 .docx），
+                 套进界面会露出日期和扩展名。跟聊天页引用卡片用同一个展示名函数，
+                 见 mistake/引用卡片露出文件名日期和docx.md -->
+            <span class="result-doc">《{{ lawDisplayName(item.docName) }}》（第 {{ item.chunkIndex + 1 }} 块）</span>
             <span class="result-score">相似度距离：{{ item.score.toFixed(4) }}</span>
           </div>
           <!-- 命中的文本块内容 -->
@@ -43,6 +46,8 @@ import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
 // 引入知识库检索 API
 import { searchKnowledge } from '../services/knowledge';
+// 引用展示名：去掉文件名里的 _日期 和扩展名（与聊天页引用卡片共用，避免两处写法漂移）
+import { lawDisplayName } from '../services/chat';
 // 类型用 import type 单独引入
 import type { SearchResult } from '../services/knowledge';
 

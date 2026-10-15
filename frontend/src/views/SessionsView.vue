@@ -135,11 +135,17 @@ const formatTime = (time: string): string => {
 </script>
 
 <style scoped>
+/* 页面容器：与案例/法条页同宽居中 */
+.sessions-page {
+  max-width: 1280px;
+  margin: 0 auto;
+}
 /* 页面标题 */
 .page-title {
   margin-top: 0;
   margin-bottom: 20px;
   font-size: 24px;
+  color: #303133;
 }
 
 /* 表格区域 */
